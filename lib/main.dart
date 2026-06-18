@@ -1,60 +1,32 @@
 import 'package:flutter/material.dart';
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/placeholder_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MetriGasApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MetriGasApp extends StatelessWidget {
+  const MetriGasApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Mi App',
+      title: 'Metri GAS',
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Colors.white,
+      ),
       initialRoute: '/',
       routes: {
         '/': (context) => const HomeScreen(),
         '/login': (context) => const LoginScreen(),
+        '/register': (context) => const PlaceholderScreen(title: 'Pantalla de Registro'),
+        '/reset-password': (context) => const PlaceholderScreen(title: 'Recuperación de Contraseña'),
+        '/dashboard': (context) => const PlaceholderScreen(title: 'Dashboard Principal'),
       },
-    );
-  }
-}
-
-// ── PANTALLA HOME ──────────────────────────────────────────
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Inicio')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.pushNamed(context, '/login');
-          },
-          child: const Text('Ir al Login'),
-        ),
-      ),
-    );
-  }
-}
-
-// ── PANTALLA LOGIN ─────────────────────────────────────────
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: const Center(
-        child: Text(
-          'Pantalla de Login',
-          style: TextStyle(fontSize: 24),
-        ),
-      ),
     );
   }
 }
