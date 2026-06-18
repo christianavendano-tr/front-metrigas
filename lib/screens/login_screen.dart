@@ -22,15 +22,17 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    final url = Uri.parse('http://localhost:3000/login'); 
+    final url = Uri.parse('http://localhost:3000/auth/login'); 
     
     try {
+      print(_emailController.text.trim());
+      print(_passwordController.text);
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'username': _emailController.text.trim(),
-          'password': _passwordController.text,
+          'email': _emailController.text.trim(),
+          'pwd': _passwordController.text,
         }),
       );
 
