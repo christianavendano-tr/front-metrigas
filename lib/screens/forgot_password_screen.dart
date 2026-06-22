@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/auth_card_scaffold.dart';
-import 'verify_token_screen.dart';
+import 'verification_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -38,7 +38,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => VerifyTokenScreen(email: email),
+            builder: (_) => VerificationScreen(email: email),
           ),
         );
       } else if (response.statusCode == 404) {
