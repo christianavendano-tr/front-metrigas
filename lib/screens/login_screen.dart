@@ -85,13 +85,13 @@ class _LoginScreenState extends State<LoginScreen> {
         content: const SingleChildScrollView(
           child: ListBody(
             children: [
-              Text('Título 1: Generalidades', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Título 1: Aviso de Privacidad', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 5),
-              Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit. Placeholder text para Metrigas.'),
+              Text('Datos personales que recabamos y su finalidad En Metrigas, recabamos datos de identificación (nombre, correo, edad) y datos financieros (procesados exclusivamente por Stripe) para gestionar su cuenta, vincular sus medidores, habilitar el historial de consumo para usuarios Premium, procesar pagos y brindar soporte técnico. Derechos ARCO (Acceso, Rectificación, Cancelación y Oposición) Usted, como titular de los datos personales, tiene derecho a conocer qué datos tenemos de usted, para qué los utilizamos y las condiciones de su uso (Acceso). Asimismo, es su derecho solicitar la corrección de su información personal si está desactualizada, es inexacta o incompleta (Rectificación); que la eliminemos de nuestros registros cuando considere que no se está utilizando adecuadamente (Cancelación); así como oponerse al uso de sus datos personales para fines específicos (Oposición). Para el ejercicio de estos derechos, deberá enviar una solicitud al correo electrónico: privacidad@metrigas.com, incluyendo nombre completo, documento de identidad, y una descripción clara de los datos sobre los que desea ejercer su derecho. Metrigas responderá en un plazo máximo de 20 días hábiles.'),
               SizedBox(height: 15),
-              Text('Subtítulo 1.1: Uso de Datos', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Título 2: Términos y Condiciones', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 5),
-              Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit. Gestión de almacenamiento local.'),
+              Text('Limitaciones del Producto (Compatibilidad) El medidor Metrigas es compatible únicamente con tanques de gas que cuenten con carátula magnética. Metrigas no se hace responsable por fallas, lecturas erróneas o incompatibilidad técnica derivada de la instalación en tanques que no cumplan con esta especificación. Uso Seguro y Exención de Responsabilidad El medidor es una herramienta de monitoreo remoto y no sustituye las normas de seguridad vigentes. Metrigas no se hace responsable por el mal uso, instalación incorrecta o manipulación indebida del dispositivo que pueda derivar en accidentes, fugas, daños materiales o daños a la integridad física. El usuario asume toda responsabilidad por el cumplimiento de las normas de seguridad en el manejo de gases inflamables. Propiedad Intelectual Todo el software, código fuente, logotipos, gráficos, interfaces de usuario y algoritmos (incluyendo el generador congruencial de encriptación utilizado en nuestro firmware) son propiedad exclusiva de Metrigas. Queda prohibida la reproducción, copia, distribución o ingeniería inversa del sistema sin autorización expresa por escrito de los titulares. Modificaciones al Aviso Este Aviso de Privacidad y los presentes Términos y Condiciones podrán ser modificados por Metrigas para cumplir con cambios legislativos. Dichas actualizaciones estarán disponibles en nuestra aplicación móvil en el apartado correspondiente. El uso continuo de la aplicación constituye la aceptación de las versiones vigentes. Jurisdicción Para cualquier controversia derivada del uso de nuestros servicios, el usuario se somete a la jurisdicción de los tribunales competentes en la ciudad de Santiago de Querétaro, Querétaro.'),
             ],
           ),
         ),
@@ -168,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _passwordController,
                       obscureText: true,
                       decoration: InputDecoration(
-                        hintText: '**********',
+                        hintText: 'contraseña',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       validator: (value) {

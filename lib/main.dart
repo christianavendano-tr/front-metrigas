@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/verification_screen.dart';
+import 'screens/subscription_screen.dart';
 import 'screens/placeholder_screen.dart';
 
 void main() {
+  // Inicialización limpia nativa de Flutter sin componentes externos
+  WidgetsFlutterBinding.ensureInitialized();
+  
   runApp(const MetriGasApp());
 }
 
@@ -23,9 +29,11 @@ class MetriGasApp extends StatelessWidget {
       routes: {
         '/': (context) => const HomeScreen(),
         '/login': (context) => const LoginScreen(),
-        '/register': (context) => const PlaceholderScreen(title: 'Pantalla de Registro'),
+        '/register': (context) => const RegisterScreen(),
+        '/verify': (context) => const VerificationScreen(),
+        '/subscription': (context) => const SubscriptionScreen(),
+        '/dashboard': (context) => const PlaceholderScreen(title: 'Dashboard Principal (Usuario Premium)'),
         '/reset-password': (context) => const PlaceholderScreen(title: 'Recuperación de Contraseña'),
-        '/dashboard': (context) => const PlaceholderScreen(title: 'Dashboard Principal'),
       },
     );
   }
