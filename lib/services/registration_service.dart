@@ -66,16 +66,14 @@ class RegistrationService {
     );
   }
   
-  /// 3. POST /auth/paymethods - Endpoint de suscripción mapeado con Stripe Checkout
+  /// 3. POST /auth/paymethods - Actualizado para recibir MailDto y procesar Stripe Checkout
   static Future<Response> createSubscription({
     required String email,
-    required String priceId,
   }) async {
     return await _dio.post(
       '/auth/paymethods', 
       data: {
-        'userEmail': email,
-        'priceId': priceId,
+        'email': email, // Cambiado de 'userEmail' a 'email' para que Nest.js lo lea perfectamente
       },
       options: Options(
         headers: {

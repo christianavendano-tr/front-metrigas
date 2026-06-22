@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:url_launcher/url_launcher.dart'; // Importamos el lanzador web
+import 'package:url_launcher/url_launcher.dart'; 
 import '../services/registration_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      // Recuperamos el email transicional que capturamos en el registro
+      // Recuperamos el email transicional capturado en el registro
       final String? userEmail = RegistrationService.temporaryEmail;
 
       if (userEmail == null) {
@@ -25,42 +25,42 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         return;
       }
 
-      // Invocamos el servicio pasándole los datos exactos que pide Nest.js
+      // Invocamos el servicio pasándole únicamente el correo que pide el MailDto
       final response = await RegistrationService.createSubscription(
         email: userEmail,
-        priceId: RegistrationService.premiumPriceId,
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        // Tu backend modificado ahora devuelve: { "paymentUrl": "https://checkout.stripe.com/..." }
-        final paymentUrl = response.data['paymentUrl'];
+        // Tu backend modificado ahora devuelve: { "url": "https://checkout.stripe.com/..." }
+        final stripeUrl = response.data['url'];
 
-        if (paymentUrl != null) {
-          final Uri url = Uri.parse(paymentUrl);
+        if (stripeUrl != null) {
+          final Uri url = Uri.parse(stripeUrl);
           
+          // Abre de forma segura la pasarela web de Stripe en el navegador del dispositivo
           if (await canLaunchUrl(url)) {
-            // Abrimos la pasarela web de Stripe
             await launchUrl(url, mode: LaunchMode.externalApplication);
             
             if (mounted) {
+              _showSnackBar('Abriendo pasarela de pago seguro...', Colors.green);
+              
+              // REDIRECCIÓN COMPLETA: Una vez lanzada con éxito la respuesta, 
+              // limpiamos el historial de pantallas y lo mandamos al Dashboard/Home principal.
+              // (Si tu ruta se llama '/home' en vez de '/dashboard', cámbiala aquí)
               Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
             }
           } else {
-            _showSnackBar('No se pudo abrir la URL de Stripe.', Colors.red);
+            _showSnackBar('No se pudo abrir la plataforma de Stripe.', Colors.red);
           }
         } else {
-          _showSnackBar('El servidor no generó una URL de pago válida.', Colors.orange);
+          _showSnackBar('El servidor no generó un enlace de pago válido.', Colors.orange);
         }
       }
     } on DioException catch (e) {
-      // Si Dio detecta un error del servidor (400, 500), saldrá por aquí:
-      final errorMsg = e.response?.data['message'] ?? 'Error en los parámetros de pago.';
+      final errorMsg = e.response?.data['message'] ?? 'Error al procesar la pasarela de pago.';
       _showSnackBar(errorMsg.toString(), Colors.red);
     } catch (e) {
-      // El error de red genérico que te salía a ti se atrapa aquí. 
-      // Imprimimos el error real en la consola oculta para que lo veas:
-      debugPrint("ERROR REAL DE RED: $e");
-      _showSnackBar('Error de red: Verifica que Nest.js/Docker esté encendido.', Colors.red);
+      _showSnackBar('Error de conexión con el servidor.', Colors.red);
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
