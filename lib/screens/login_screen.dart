@@ -199,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           GestureDetector(
                             onTap: () => Navigator.pushNamed(context, '/reset-password'),
                             child: const Text(
-                              '¿Olvisaste tu contraseña?',
+                              '¿Olvidaste tu contraseña?',
                               style: TextStyle(color: Color(0xFF0066FF), fontSize: 15, fontWeight: FontWeight.w500),
                             ),
                           ),

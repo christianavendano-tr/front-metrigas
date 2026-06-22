@@ -75,53 +75,69 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0052CC),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Metri GAS Premium ✨', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const Text('Estás a un paso de activar tu cuenta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 20),
-                      _buildBenefit(Icons.analytics, 'Análisis de consumo en tiempo real'),
-                      _buildBenefit(Icons.picture_as_pdf, 'Reportes descargables'),
-                      const SizedBox(height: 25),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: const Color(0xFFE6F0FF), borderRadius: BorderRadius.circular(12)),
-                        child: const Column(
-                          children: [
-                            Text('\$80 MXN', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF0044CC))),
-                            Text('por mes', style: TextStyle(color: Colors.grey)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 25),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF002266)),
-                          onPressed: _isProcessing ? null : _redirectStripeCheckout,
-                          child: _isProcessing 
-                              ? const CircularProgressIndicator(color: Colors.white) 
-                              : const Text('Proceder al pago seguro', style: TextStyle(color: Colors.white)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+        child: Stack(
+          children: [
+            // MODIFICADO: Botón superior izquierdo que destruye el flujo actual y regresa al Login
+            Positioned(
+              top: 10,
+              left: 10,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                onPressed: () {
+                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                },
               ),
-            ],
-          ),
+            ),
+            // Contenido original completamente intacto
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Metri GAS Premium ✨', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        children: [
+                          const Text('Estás a un paso de activar tu cuenta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 20),
+                          _buildBenefit(Icons.analytics, 'Análisis de consumo en tiempo real'),
+                          _buildBenefit(Icons.picture_as_pdf, 'Reportes descargables'),
+                          const SizedBox(height: 25),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: const Color(0xFFE6F0FF), borderRadius: BorderRadius.circular(12)),
+                            child: const Column(
+                              children: [
+                                Text('\$80 MXN', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF0044CC))),
+                                Text('por mes', style: TextStyle(color: Colors.grey)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 25),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF002266)),
+                              onPressed: _isProcessing ? null : _redirectStripeCheckout,
+                              child: _isProcessing 
+                                  ? const CircularProgressIndicator(color: Colors.white) 
+                                  : const Text('Proceder al pago seguro', style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

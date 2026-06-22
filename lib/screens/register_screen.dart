@@ -83,6 +83,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
             child: Column(
               children: [
+                // MODIFICADO: Añadido botón superior para regresar a la pantalla anterior (Login)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
                 const SizedBox(height: 15),
                 const Text('Metri GAS', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
@@ -107,7 +115,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _buildLabel('Nombre'),
                           TextFormField(
                             controller: _nameController,
-                            decoration: const InputDecoration(hintText: 'Hermenegildo Fulano del Río', border: OutlineInputBorder()),
+                            decoration: const InputDecoration(hintText: 'nombre', border: OutlineInputBorder()),
                             validator: (v) => v!.isEmpty ? 'Campo requerido' : null,
                           ),
                           const SizedBox(height: 12),
@@ -115,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           TextFormField(
                             controller: _ageController,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(hintText: '38', border: OutlineInputBorder()),
+                            decoration: const InputDecoration(hintText: 'edad', border: OutlineInputBorder()),
                             validator: (v) {
                               if (v!.isEmpty) return 'Campo requerido';
                               if (int.tryParse(v) == null) return 'Ingrese una edad válida';
@@ -136,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
-                              hintText: '**********',
+                              hintText: 'contraseña',
                               border: const OutlineInputBorder(),
                               suffixIcon: IconButton(
                                 icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
@@ -151,7 +159,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _confirmPasswordController,
                             obscureText: _obscureConfirmPassword,
                             decoration: InputDecoration(
-                              hintText: '**********',
+                              hintText: 'repita contraseña',
                               border: const OutlineInputBorder(),
                               suffixIcon: IconButton(
                                 icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
