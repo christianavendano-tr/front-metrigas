@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../widgets/auth_card_scaffold.dart';
+import 'verify_token_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -13,27 +15,58 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _emailController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _handleSendLink() async {
+  // GET /auth/checkemailpwd/:email
+  // Genera y envía el código de 6 dígitos al correo del usuario.
+  Future<void> _handleSendCode() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
+    final email = _emailController.text.trim();
+    final url = Uri.parse(
+      'http://localhost:3000/auth/checkemailpwd/${Uri.encodeComponent(email)}',
+    );
 
-    // TODO: reemplazar por la llamada real a tu backend, por ejemplo:
-    // final url = Uri.parse('http://localhost:3000/auth/forgot-password');
-    // await http.post(url,
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode({'email': _emailController.text.trim()}),
-    // );
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final response = await http.get(url);
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      Navigator.pushNamed(
-        context,
-        '/verify-token',
-        arguments: _emailController.text.trim(),
-      );
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Código enviado al correo electrónico')),
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => VerifyTokenScreen(email: email),
+          ),
+        );
+      } else if (response.statusCode == 404) {
+        _showErrorDialog('No encontramos una cuenta con ese correo electrónico.');
+      } else {
+        _showErrorDialog('Error en el servidor. Código: ${response.statusCode}');
+      }
+    } catch (_) {
+      _showErrorDialog('No se pudo conectar al servidor. Verifica tu red y el backend.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -50,22 +83,45 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Botón de regreso al Login
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back_ios, size: 14, color: AuthCardScaffold.primaryBlue),
+                    SizedBox(width: 4),
+                    Text(
+                      'Volver',
+                      style: TextStyle(
+                        color: AuthCardScaffold.primaryBlue,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             const Text(
               'Recuperar contraseña',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 17,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AuthCardScaffold.primaryBlue,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             const Text(
               'Para recuperar tu contraseña enviaremos un código de '
               'verificación al correo asociado a tu cuenta. Esto nos '
-              'ayudará a verificar tu identidad',
+              'ayudará a verificar tu identidad.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AuthCardScaffold.primaryBlue),
+              style: TextStyle(fontSize: 13, color: AuthCardScaffold.primaryBlue, height: 1.4),
             ),
             const SizedBox(height: 20),
             const Text('Correo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -79,26 +135,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) return 'El correo no puede estar vacío';
+                if (!value.contains('@')) return 'Ingresa un correo válido';
                 return null;
               },
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             SizedBox(
-              height: 48,
+              height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: _isLoading ? null : _handleSendLink,
+                onPressed: _isLoading ? null : _handleSendCode,
                 child: _isLoading
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
+                        height: 22,
+                        width: 22,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('Enviar enlace de recuperación'),
+                    : const Text('Enviar enlace de recuperación', style: TextStyle(fontSize: 16)),
               ),
             ),
           ],

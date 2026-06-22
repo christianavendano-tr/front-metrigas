@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../widgets/auth_card_scaffold.dart';
 
 class NewPasswordScreen extends StatefulWidget {
-  const NewPasswordScreen({super.key});
+  final String email;
+  final String code;
+  const NewPasswordScreen({super.key, required this.email, required this.code});
 
   @override
   State<NewPasswordScreen> createState() => _NewPasswordScreenState();
@@ -17,37 +21,71 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   bool get _hasUppercase => _newPasswordController.text.contains(RegExp(r'[A-Z]'));
   bool get _hasNumber => _newPasswordController.text.contains(RegExp(r'[0-9]'));
 
+  // POST /auth/checkemailpwd
+  // Body: { email, code, pwd }
   Future<void> _handleConfirm() async {
     if (_newPasswordController.text != _repeatPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Las contraseñas no coinciden')),
-      );
+      _showErrorDialog('Las contraseñas no coinciden.');
       return;
     }
     if (!_hasMinLength || !_hasUppercase || !_hasNumber) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La contraseña no cumple los requisitos')),
-      );
+      _showErrorDialog('La contraseña no cumple los requisitos mínimos.');
       return;
     }
 
     setState(() => _isLoading = true);
+    final url = Uri.parse('http://localhost:3000/auth/checkemailpwd');
 
-    // TODO: reemplazar por la llamada real a tu backend, por ejemplo:
-    // final url = Uri.parse('http://localhost:3000/auth/reset-password');
-    // await http.post(url,
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode({'password': _newPasswordController.text}),
-    // );
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Contraseña actualizada correctamente')),
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': widget.email,
+          'code': widget.code,
+          'pwd': _newPasswordController.text,
+        }),
       );
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contraseña actualizada con éxito')),
+        );
+        // Regresa al Login limpiando todo el stack de navegación
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      } else if (response.statusCode == 400) {
+        String msg = 'Código incorrecto o expirado. Solicita un nuevo código.';
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map && data['message'] != null) msg = data['message'].toString();
+        } catch (_) {}
+        _showErrorDialog(msg);
+      } else {
+        _showErrorDialog('Error en el servidor. Código: ${response.statusCode}');
+      }
+    } catch (_) {
+      _showErrorDialog('No se pudo conectar al servidor. Verifica tu red y el backend.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -63,11 +101,34 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Botón de regreso a la pantalla de token
+          Align(
+            alignment: Alignment.centerLeft,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_back_ios, size: 14, color: AuthCardScaffold.primaryBlue),
+                  SizedBox(width: 4),
+                  Text(
+                    'Volver',
+                    style: TextStyle(
+                      color: AuthCardScaffold.primaryBlue,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           const Text(
             'Usuario verificado correctamente',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: AuthCardScaffold.primaryBlue,
             ),
@@ -77,11 +138,11 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w500,
               color: AuthCardScaffold.primaryBlue,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           const Text('Nueva contraseña', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 6),
           TextField(
@@ -89,6 +150,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
             obscureText: true,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
+              hintText: '**********',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
@@ -99,18 +161,22 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
             controller: _repeatPasswordController,
             obscureText: true,
             decoration: InputDecoration(
+              hintText: '**********',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('La contraseña debe tener:', textAlign: TextAlign.center, style: TextStyle(fontSize: 13)),
-          const SizedBox(height: 6),
+          const Text(
+            'La contraseña debe tener:',
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(height: 8),
           _Requisito(cumplido: _hasMinLength, texto: 'Mínimo 8 caracteres'),
           _Requisito(cumplido: _hasUppercase, texto: 'Al menos una mayúscula'),
           _Requisito(cumplido: _hasNumber, texto: 'Al menos un número'),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           SizedBox(
-            height: 48,
+            height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black,
@@ -120,11 +186,11 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
               onPressed: _isLoading ? null : _handleConfirm,
               child: _isLoading
                   ? const SizedBox(
-                      height: 20,
-                      width: 20,
+                      height: 22,
+                      width: 22,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
-                  : const Text('Confirmar'),
+                  : const Text('Confirmar', style: TextStyle(fontSize: 16)),
             ),
           ),
         ],
@@ -143,7 +209,6 @@ class _Requisito extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             cumplido ? Icons.check_circle : Icons.circle_outlined,
