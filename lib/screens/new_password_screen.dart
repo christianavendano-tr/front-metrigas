@@ -49,7 +49,9 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
+      // El backend puede responder 200 o 201 según la implementación;
+      // ambos indican que la contraseña se actualizó correctamente.
+      if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contraseña actualizada con éxito')),
         );
