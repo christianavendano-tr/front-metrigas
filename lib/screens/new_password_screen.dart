@@ -17,9 +17,43 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   final TextEditingController _repeatPasswordController = TextEditingController();
   bool _isLoading = false;
 
-  bool get _hasMinLength => _newPasswordController.text.length >= 8;
-  bool get _hasUppercase => _newPasswordController.text.contains(RegExp(r'[A-Z]'));
-  bool get _hasNumber => _newPasswordController.text.contains(RegExp(r'[0-9]'));
+  // Variables de estado explícitas en vez de getters.
+  // Esto garantiza que se actualicen exactamente cuando llamamos
+  // a _validatePassword() y evita cualquier ambigüedad sobre cuándo
+  // Flutter reconstruye el widget.
+  bool _hasMinLength = false;
+  bool _hasUppercase = false;
+  bool _hasNumber = false;
+
+  static final RegExp _uppercaseRegExp = RegExp(r'[A-Z]');
+  static final RegExp _numberRegExp = RegExp(r'[0-9]');
+
+  @override
+  void initState() {
+    super.initState();
+    // Escucha cambios en el controller directamente, en vez de depender
+    // solo del onChanged del TextField (más robusto ante autofill, paste, etc.)
+    _newPasswordController.addListener(_validatePassword);
+  }
+
+  void _validatePassword() {
+    final text = _newPasswordController.text;
+    final newHasMinLength = text.length >= 8;
+    final newHasUppercase = _uppercaseRegExp.hasMatch(text);
+    final newHasNumber = _numberRegExp.hasMatch(text);
+
+    // Solo llamamos setState si algo realmente cambió, para evitar
+    // rebuilds innecesarios en cada tecla presionada.
+    if (newHasMinLength != _hasMinLength ||
+        newHasUppercase != _hasUppercase ||
+        newHasNumber != _hasNumber) {
+      setState(() {
+        _hasMinLength = newHasMinLength;
+        _hasUppercase = newHasUppercase;
+        _hasNumber = newHasNumber;
+      });
+    }
+  }
 
   // POST /auth/checkemailpwd
   // Body: { email, code, pwd }
@@ -92,6 +126,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
   @override
   void dispose() {
+    _newPasswordController.removeListener(_validatePassword);
     _newPasswordController.dispose();
     _repeatPasswordController.dispose();
     super.dispose();
@@ -150,7 +185,6 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
           TextField(
             controller: _newPasswordController,
             obscureText: true,
-            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: '**********',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
