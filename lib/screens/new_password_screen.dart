@@ -136,6 +136,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   Widget build(BuildContext context) {
     return AuthCardScaffold(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Botón de regreso a la pantalla de token
@@ -212,6 +213,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
           _Requisito(cumplido: _hasNumber, texto: 'Al menos un número'),
           const SizedBox(height: 24),
           SizedBox(
+            width: double.infinity,
             height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
