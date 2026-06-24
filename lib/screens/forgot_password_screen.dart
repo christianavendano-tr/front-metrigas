@@ -81,13 +81,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       child: Form(
         key: _formKey,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Botón de regreso al Login
             Align(
               alignment: Alignment.centerLeft,
               child: GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -110,28 +110,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               'Recuperar contraseña',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: AuthCardScaffold.primaryBlue,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             const Text(
               'Para recuperar tu contraseña enviaremos un código de '
               'verificación al correo asociado a tu cuenta. Esto nos '
               'ayudará a verificar tu identidad.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AuthCardScaffold.primaryBlue, height: 1.4),
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF0044CC),
+                height: 1.3,
+              ),
             ),
-            const SizedBox(height: 20),
-            const Text('Correo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 6),
+            const SizedBox(height: 25),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Correo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'correoelectrónico@dominio.com',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border: OutlineInputBorder(),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) return 'El correo no puede estar vacío';
@@ -141,21 +148,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 24),
             SizedBox(
+              width: double.infinity,
               height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: _isLoading ? null : _handleSendCode,
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Text('Enviar enlace de recuperación', style: TextStyle(fontSize: 16)),
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Enviar enlace de recuperación', style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ),
           ],

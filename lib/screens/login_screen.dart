@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('¡Ingreso Exitoso!')),
         );
-        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);  
       }
 } else if (response.statusCode == 401) {
         _showErrorDialog('Correo o contraseña incorrectos.');
