@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../widgets/wave_clipper.dart';
+import '../services/registration_service.dart'; // <--- AGREGA ESTA LÍNEA
 import '../services/session_service.dart';
+import '../services/storage_service.dart'; // IMPORTACIÓN DEL CONTROL DE ESTADO ADAPTATIVO
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,16 +42,42 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = jsonDecode(response.body);
         String token = data['accessToken'];
 
-        // Guardamos el token de forma segura en memoria (Sin usar almacenamiento nativo)
+        // Guardamos el token de forma segura en memoria
         SessionService.saveToken(token);
+
+        String nombreReal = 'Usuario Premium';
+        bool esSuscripcionActiva = false;
+
+        if (data['user'] != null) {
+          nombreReal = data['user']['username'] ?? 'Usuario Premium';
+          esSuscripcionActiva = data['user']['isActive'] ?? false;
+        }
+
+        UserState estadoFinalUsuario = esSuscripcionActiva 
+            ? UserState.premiumActive 
+            : UserState.premiumInactive;
+
+        StorageService.setMockState(
+          estadoFinalUsuario, 
+          name: nombreReal, 
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Ingreso Exitoso!')),
-        );
-        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
-      }
-} else if (response.statusCode == 401) {
+            const SnackBar(content: Text('¡Ingreso Exitoso!')),
+          );
+          
+          // =======================================================================
+          // SOLUCIÓN: Pasamos el correo como argumento nativo al Dashboard
+          // =======================================================================
+          Navigator.pushNamedAndRemoveUntil(
+            context, 
+            '/dashboard', 
+            (route) => false,
+            arguments: _emailController.text.trim(), // Enviamos el string del correo
+          );
+        }
+      } else if (response.statusCode == 401) {
         _showErrorDialog('Correo o contraseña incorrectos.');
       } else {
         _showErrorDialog('Error en el servidor. Código: ${response.statusCode}');
@@ -218,6 +246,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                           ),
+
+                          const SizedBox(height: 20),
+                          TextButton.icon(
+                            onPressed: () {
+                              // Asegura que el estado esté explícitamente en modo Invitado/Guest
+                              StorageService.setMockState(UserState.guest);
+                              Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+                            },
+                            icon: const Icon(Icons.arrow_back, size: 16, color: Color(0xFF0052CC)),
+                            label: const Text(
+                              'Continuar como invitado',
+                              style: TextStyle(
+                                color: Color(0xFF0052CC), 
+                                fontSize: 15, 
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                          
                           const SizedBox(height: 40),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20.0),
