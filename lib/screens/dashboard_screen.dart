@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/storage_service.dart';
 import '../services/session_service.dart'; 
+import 'meter_dashboard_screen.dart'; // O la ruta relativa correcta, ej: '../widgets/meter_dashboard_screen.dart'
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -357,9 +358,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                 ),
                 child: const Text(
                   'Su suscripción no está activa. Si no paga en 1 mes se borrará toda su info de la BD',
@@ -416,29 +417,38 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       ),
     );
   }
+////REEMPLAZAR POR DATOS REALES DE LA BASE DE DATOS, PERO POR AHORA USAMOS PLACEHOLDERS PARA PRUEBAS
+  Widget _buildMedidoresSectionPlaceholder(UserState userState) {
+    // Determinamos si el usuario actual tiene el premium activo según su estado
+    final bool isPremiumActive = userState == UserState.premiumActive;
 
-  Widget _buildMedidoresSectionPlaceholder(UserState state) {
-    if (state == UserState.guest) {
-      return Card(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        child: const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Text(
-            'No se a encontrado ningun medidor.\nVincule un nuevo medidor a su cuenta para poder acceder a su monitoreo en tiempo real.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, height: 1.4),
-          ),
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: ListTile(
+        leading: const Icon(Icons.gas_meter, color: Color(0xFF0052CC), size: 36),
+        title: const Text(
+          'Cocina Principal',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
-      );
-    } else {
-      return const Column(
-        children: [
-          Card(child: ListTile(leading: Icon(Icons.gas_meter), title: Text('Tanque Principal Patio'))),
-          Card(child: ListTile(leading: Icon(Icons.gas_meter), title: Text('Tanque Secundario Cocina'))),
-        ],
-      );
-    }
+        subtitle: const Text('ID: 3BC8E162 • 15 Litros'),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+        onTap: () {
+          // ENLAZAR AQUÍ: Navegación transfiriendo los parámetros exactos exigidos por el ticket
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MeterDashboardScreen(
+                hardwareId: '3bc8e162-4217-4934-bc2c-5645367b1201',
+                alias: 'Cocina Principal',
+                capacityLiters: 15.0,
+                isPremiumActive: isPremiumActive, // Sincronizado dinámicamente con el estado de tu Dashboard
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildBotonEnlazarPlaceholder() {

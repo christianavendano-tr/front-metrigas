@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../widgets/wave_clipper.dart';
-import '../services/registration_service.dart'; // <--- AGREGA ESTA LÍNEA
+// <--- AGREGA ESTA LÍNEA
 import '../services/session_service.dart';
 import '../services/storage_service.dart'; // IMPORTACIÓN DEL CONTROL DE ESTADO ADAPTATIVO
 
