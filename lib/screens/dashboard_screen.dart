@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/storage_service.dart';
 import '../services/session_service.dart'; 
+import '../services/meter_manager.dart'; 
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -12,34 +13,77 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-// AGREGADO: 'with WidgetsBindingObserver' para escuchar cuando el usuario regresa a la App
 class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
+  List<Map<String, dynamic>> _medidores = [];
+  bool _isLoadingMeters = false;
 
   @override
   void initState() {
     super.initState();
-    // Registramos el observador del ciclo de vida
     WidgetsBinding.instance.addObserver(this);
     _sincronizarEstadoUsuario();
+    _cargarListadoMedidores(); 
   }
 
   @override
   void dispose() {
-    // Destruimos el observador al salir de la pantalla
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // SOLUCIÓN AL NAVEGADOR EXTERNO: Se ejecuta automáticamente al volver de Stripe/Navegador externo
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      debugPrint("La aplicación ha vuelto al primer plano. Sincronizando estado...");
       _sincronizarEstadoUsuario();
+      _cargarListadoMedidores();
     }
   }
 
-  /// Petición al Backend para leer el estado real de la base de datos
+  Future<void> _cargarListadoMedidores() async {
+    if (!mounted) return;
+    setState(() => _isLoadingMeters = true);
+    
+    final lista = await MeterManager.obtenerMedidores();
+    
+    if (mounted) {
+      setState(() {
+        _medidores = lista;
+        _isLoadingMeters = false;
+      });
+    }
+  }
+
+  // =======================================================================
+  // INYECTOR MODO DEV OPTIMIZADO CON FORMATO ESTRUCTURAL DE GUIONES UUID
+  // =======================================================================
+  Future<void> _inyectarMedidoresModoDev() async {
+    final medidor1 = {
+      "id": "e3b0c442-98fc-413b-9671-9a81817fc7e2", // Formato estructural correcto
+      "metername": "Cocina Principal",
+      "capacity": "20.0",
+      "ownerId": "invitado-local-id"
+    };
+    final medidor2 = {
+      "id": "f2a1d553-09eb-524c-8762-0b92928ed8f3", // Formato estructural correcto
+      "metername": "Calentador",
+      "capacity": "10.0",
+      "ownerId": "invitado-local-id"
+    };
+
+    await MeterManager.guardarMedidorLocal(medidor1);
+    await MeterManager.guardarMedidorLocal(medidor2);
+    await _cargarListadoMedidores();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔧 Modo Dev: Medidores UUID inyectados localmente.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
   Future<void> _sincronizarEstadoUsuario() async {
     if (StorageService.userStateNotifier.value == UserState.guest) return;
 
@@ -196,6 +240,12 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     }
   }
 
+  void _manejarAccionNuevoMedidor(UserState estadoActual, String? userEmail) {
+    Navigator.pushNamed(context, '/add-meter', arguments: userEmail).then((_) {
+      _cargarListadoMedidores();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -208,18 +258,12 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         automaticallyImplyLeading: false,
         title: const Text('Metri GAS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
-        // SOLUCIÓN DE RESPALDO: Agregamos un botón manual de actualizar en la barra superior
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Actualizar Estado',
             onPressed: () async {
               await _sincronizarEstadoUsuario();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Estado de cuenta actualizado.'), duration: Duration(seconds: 1)),
-                );
-              }
+              await _cargarListadoMedidores();
             },
           ),
         ],
@@ -240,18 +284,147 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       _buildPerfilSeccionCondicional(context, userState, userName, userEmail),
                       
                       const SizedBox(height: 24),
-                      const Text('MIS MEDIDORES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('MIS MEDIDORES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          if (userState == UserState.guest)
+                            TextButton.icon(
+                              onPressed: _inyectarMedidoresModoDev,
+                              icon: const Icon(Icons.developer_mode, size: 16, color: Colors.orange),
+                              label: const Text('Inyectar Medidores (Dev)', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
 
-                      _buildMedidoresSectionPlaceholder(userState),
+                      _buildSeccionMedidoresDinamica(),
                     ],
                   ),
                 ),
               ),
-              _buildBotonEnlazarPlaceholder(),
+              _buildBotonEnlazarDinamico(userState, userEmail),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSeccionMedidoresDinamica() {
+    if (_isLoadingMeters) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_medidores.isEmpty) {
+      return Card(
+        color: Colors.white,
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: const Padding(
+          padding: EdgeInsets.all(24.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: Text(
+              'Aún no tienes medidores enlazados.\nVincule un nuevo medidor a su cuenta para poder acceder a su monitoreo en tiempo real.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, height: 1.4, fontSize: 13),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _medidores.length,
+      itemBuilder: (context, index) {
+        final meter = _medidores[index];
+        final String idHardware = meter['id']?.toString() ?? 'ID-UNK';
+        final String aliasHardware = meter['metername'] ?? 'Medidor';
+        final String capacidad = meter['capacity']?.toString() ?? '20';
+        
+        final int porcentajeGas = index == 0 ? 85 : (index == 1 ? 16 : 50);
+
+        return Card(
+          color: Colors.white,
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.pushNamed(context, '/meter-dashboard', arguments: idHardware),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        aliasHardware,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$capacidad L - ID:$idHardware',
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: porcentajeGas / 100,
+                            minHeight: 8,
+                            backgroundColor: Colors.blue.withOpacity(0.2),
+                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0052CC)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '$porcentajeGas%',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey),
+                      )
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBotonEnlazarDinamico(UserState estado, String? email) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0052CC),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 2,
+          ),
+          onPressed: () => _manejarAccionNuevoMedidor(estado, email),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('Enlazar nuevo medidor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
       ),
     );
   }
@@ -395,12 +568,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       if (esActivo) {
                         _mostrarDialogoCancelar(context, userName, userEmail);
                       } else {
-                        // Navegamos y al regresar (sea por pop o descarte) llamamos a la sincronización
                         Navigator.pushNamed(
                           context, 
                           '/subscription', 
                           arguments: userEmail
-                        ).then((_) => _sincronizarEstadoUsuario());
+                        ).then((_) {
+                          _sincronizarEstadoUsuario();
+                          _cargarListadoMedidores();
+                        });
                       }
                     },
                     child: Text(
@@ -412,49 +587,6 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMedidoresSectionPlaceholder(UserState state) {
-    if (state == UserState.guest) {
-      return Card(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        child: const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Text(
-            'No se a encontrado ningun medidor.\nVincule un nuevo medidor a su cuenta para poder acceder a su monitoreo en tiempo real.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, height: 1.4),
-          ),
-        ),
-      );
-    } else {
-      return const Column(
-        children: [
-          Card(child: ListTile(leading: Icon(Icons.gas_meter), title: Text('Tanque Principal Patio'))),
-          Card(child: ListTile(leading: Icon(Icons.gas_meter), title: Text('Tanque Secundario Cocina'))),
-        ],
-      );
-    }
-  }
-
-  Widget _buildBotonEnlazarPlaceholder() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 50,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0052CC),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () {},
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('Enlazar nuevo medidor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       ),
     );

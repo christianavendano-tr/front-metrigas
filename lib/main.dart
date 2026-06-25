@@ -6,6 +6,7 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/verification_screen.dart';
 import 'screens/subscription_screen.dart';
+import 'screens/forgot_password_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,8 @@ class MetriGasApp extends StatelessWidget {
         '/register':     (context) => const RegisterScreen(),
         '/verify':       (context) => const VerificationScreen(),
         '/subscription': (context) => const SubscriptionScreen(),
+        '/forgot': (context) => const ForgotPasswordScreen(),
+
       },
     );
   }
