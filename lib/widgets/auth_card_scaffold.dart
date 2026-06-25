@@ -1,62 +1,50 @@
 import 'package:flutter/material.dart';
 
-/// Estructura visual compartida por las pantallas de recuperación de
-/// contraseña (Recuperar contraseña, Token de verificación, Nueva
-/// contraseña). Reutiliza el mismo azul y la misma tipografía que el
-/// login para que las 3 pantallas se vean consistentes con el resto
-/// de la app.
+/// Estructura visual compartida por las pantallas de autenticación
+/// (Recuperar contraseña, Token de verificación, Registro, Nueva
+/// contraseña). Fondo azul de marca con "Metri GAS" en la parte
+/// superior y una tarjeta blanca centrada que contiene el formulario.
 class AuthCardScaffold extends StatelessWidget {
   final Widget child;
   const AuthCardScaffold({super.key, required this.child});
 
-  /// Mismo azul que usa el header del login (Color(0xFF0052CC)).
+  /// Azul de marca usado en toda la app.
   static const Color primaryBlue = Color(0xFF0052CC);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // Franja azul de fondo, igual a la que se ve detrás de la
-          // tarjeta blanca en el diseño.
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 230,
-            child: Container(color: primaryBlue),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Metri GAS',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
+      backgroundColor: primaryBlue,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Metri GAS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: const Color(0xFFD9D9D9)),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                ),
+                const SizedBox(height: 25),
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
                     child: child,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
