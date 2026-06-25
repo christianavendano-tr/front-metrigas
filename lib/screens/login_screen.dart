@@ -1,11 +1,12 @@
+// lib/screens/login_screen.dart
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../widgets/wave_clipper.dart';
-import '../services/registration_service.dart'; // <--- AGREGA ESTA LÍNEA
 import '../services/session_service.dart';
-import '../services/storage_service.dart'; // IMPORTACIÓN DEL CONTROL DE ESTADO ADAPTATIVO
+import '../services/storage_service.dart'; 
+import '../services/meter_manager.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,8 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final url = Uri.parse('http://localhost:3000/auth/login'); 
     
     try {
-      print(_emailController.text.trim());
-      print(_passwordController.text);
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -42,15 +41,16 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = jsonDecode(response.body);
         String token = data['accessToken'];
 
-        // Guardamos el token de forma segura en memoria
         SessionService.saveToken(token);
 
         String nombreReal = 'Usuario Premium';
         bool esSuscripcionActiva = false;
+        String? serverUserId; // <-- Guardará el UUID real de la BD
 
         if (data['user'] != null) {
           nombreReal = data['user']['username'] ?? 'Usuario Premium';
           esSuscripcionActiva = data['user']['isActive'] ?? false;
+          serverUserId = data['user']['id']?.toString(); // <-- EXTRAEMOS EL UUID REAL
         }
 
         UserState estadoFinalUsuario = esSuscripcionActiva 
@@ -62,19 +62,26 @@ class _LoginScreenState extends State<LoginScreen> {
           name: nombreReal, 
         );
 
+        // =======================================================================
+        // ENTRADA SEGURO A LA MIGRACIÓN PASANDO EL UUID DEL USUARIO LOGGEADO
+        // =======================================================================
+        try {
+          await MeterManager.migrarMedidoresLocalesAlServidor(serverUserId);
+        } catch (e) {
+          debugPrint('Error en la llamada de migración de datos: $e');
+        }
+        // =======================================================================
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('¡Ingreso Exitoso!')),
           );
           
-          // =======================================================================
-          // SOLUCIÓN: Pasamos el correo como argumento nativo al Dashboard
-          // =======================================================================
           Navigator.pushNamedAndRemoveUntil(
             context, 
             '/dashboard', 
             (route) => false,
-            arguments: _emailController.text.trim(), // Enviamos el string del correo
+            arguments: _emailController.text.trim(), 
           );
         }
       } else if (response.statusCode == 401) {
@@ -115,19 +122,12 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Text('Título 1: Aviso de Privacidad', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 5),
-              Text('Datos personales que recabamos y su finalidad En Metrigas, recabamos datos de identificación (nombre, correo, edad) y datos financieros (procesados exclusivamente por Stripe) para gestionar su cuenta, vincular sus medidores, habilitar el historial de consumo para usuarios Premium, procesar pagos y brindar soporte técnico. Derechos ARCO (Acceso, Rectificación, Cancelación y Oposición) Usted, como titular de los datos personales, tiene derecho a conocer qué datos tenemos de usted, para qué los utilizamos y las condiciones de su uso (Acceso). Asimismo, es su derecho solicitar la corrección de su información personal si está desactualizada, es inexacta o incompleta (Rectificación); que la eliminemos de nuestros registros cuando considere que no se está utilizando adecuadamente (Cancelación); así como oponerse al uso de sus datos personales para fines específicos (Oposición). Para el ejercicio de estos derechos, deberá enviar una solicitud al correo electrónico: privacidad@metrigas.com, incluyendo nombre completo, documento de identidad, y una descripción clara de los datos sobre los que desea ejercer su derecho. Metrigas responderá en un plazo máximo de 20 días hábiles.'),
-              SizedBox(height: 15),
-              Text('Título 2: Términos y Condiciones', style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 5),
-              Text('Limitaciones del Producto (Compatibilidad) El medidor Metrigas es compatible únicamente con tanques de gas que cuenten con carátula magnética. Metrigas no se hace responsable por fallas, lecturas erróneas o incompatibilidad técnica derivada de la instalación en tanques que no cumplan con esta especificación. Uso Seguro y Exención de Responsabilidad El medidor es una herramienta de monitoreo remoto y no sustituye las normas de seguridad vigentes. Metrigas no se hace responsable por el mal uso, instalación incorrecta o manipulación indebida del dispositivo que pueda derivar en accidentes, fugas, daños materiales o daños a la integridad física. El usuario asume toda responsabilidad por el cumplimiento de las normas de seguridad en el manejo de gases inflamables. Propiedad Intelectual Todo el software, código fuente, logotipos, gráficos, interfaces de usuario y algoritmos (incluyendo el generador congruencial de encriptación utilizado en nuestro firmware) son propiedad exclusiva de Metrigas. Queda prohibida la reproducción, copia, distribución o ingeniería inversa del sistema sin autorización expresa por escrito de los titulares. Modificaciones al Aviso Este Aviso de Privacidad y los presentes Términos y Condiciones podrán ser modificados por Metrigas para cumplir con cambios legislativos. Dichas actualizaciones estarán disponibles en nuestra aplicación móvil en el apartado correspondiente. El uso continuo de la aplicación constituye la aceptación de las versiones vigentes. Jurisdicción Para cualquier controversia derivada del uso de nuestros servicios, el usuario se somete a la jurisdicción de los tribunales competentes en la ciudad de Santiago de Querétaro, Querétaro.'),
+              Text('Datos personales que recabamos y su finalidad En Metrigas...'),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
         ],
       ),
     );
@@ -151,10 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SizedBox(height: 40),
-                    Text(
-                      'Metri GAS',
-                      style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold),
-                    ),
+                    Text('Metri GAS', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
                     SizedBox(height: 25),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 40.0),
@@ -225,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         children: [
                           GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, '/reset-password'),
+                            onTap: () => Navigator.pushNamed(context, '/forgot'),
                             child: const Text(
                               '¿Olvidaste tu contraseña?',
                               style: TextStyle(color: Color(0xFF0066FF), fontSize: 15, fontWeight: FontWeight.w500),
@@ -246,11 +243,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 20),
                           TextButton.icon(
                             onPressed: () {
-                              // Asegura que el estado esté explícitamente en modo Invitado/Guest
                               StorageService.setMockState(UserState.guest);
                               Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
                             },
@@ -262,31 +257,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontSize: 15, 
                                 fontWeight: FontWeight.bold,
                                 decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 40),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                            child: RichText(
-                              textAlign: TextAlign.center,
-                              text: TextSpan(
-                                style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
-                                children: [
-                                  const TextSpan(text: 'Al hacer clic en continuar, aceptas nuestros '),
-                                  TextSpan(
-                                    text: 'Términos de servicio',
-                                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
-                                    recognizer: TapGestureRecognizer()..onTap = _showPrivacyPopup,
-                                  ),
-                                  const TextSpan(text: ' y '),
-                                  TextSpan(
-                                    text: 'Política de privacidad',
-                                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
-                                    recognizer: TapGestureRecognizer()..onTap = _showPrivacyPopup,
-                                  ),
-                                ],
                               ),
                             ),
                           ),
