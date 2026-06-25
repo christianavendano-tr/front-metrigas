@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
+import 'services/storage_service.dart';
+import 'screens/welcome_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/forgot_password_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/verification_screen.dart';
 import 'screens/subscription_screen.dart';
-import 'screens/placeholder_screen.dart';
+import 'screens/forgot_password_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await StorageService.init();
+  
+  // === CONFIGURACIÓN DE PRUEBA (MOCK) ===
+  // Descomenta la línea que quieras probar para ver cómo muta el Dashboard automáticamente:
+  StorageService.setMockState(UserState.guest);
+  // StorageService.setMockState(UserState.premiumActive, name: "Carlita Wishes");
+  // StorageService.setMockState(UserState.premiumInactive, name: "Carlita Wishes");
+  // ======================================
+
   runApp(const MetriGasApp());
 }
 
@@ -21,16 +32,20 @@ class MetriGasApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primaryColor: const Color(0xFF0052CC),
+        scaffoldBackgroundColor: const Color(0xFFE5E5E5),
         useMaterial3: true,
       ),
-      initialRoute: '/login',
+      // Si es la primera vez muestra Bienvenida, sino va directo al Dashboard
+      initialRoute: StorageService.isFirstTime ? '/welcome' : '/dashboard',
       routes: {
+        '/welcome':      (context) => const WelcomeScreen(),
+        '/dashboard':    (context) => const DashboardScreen(),
         '/login':        (context) => const LoginScreen(),
-        '/reset-password': (context) => const ForgotPasswordScreen(),
         '/register':     (context) => const RegisterScreen(),
         '/verify':       (context) => const VerificationScreen(),
         '/subscription': (context) => const SubscriptionScreen(),
-        '/dashboard':    (context) => const PlaceholderScreen(title: 'Dashboard Principal (Usuario Premium)'),
+        '/forgot': (context) => const ForgotPasswordScreen(),
+
       },
     );
   }

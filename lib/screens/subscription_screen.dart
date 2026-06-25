@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 import '../services/registration_service.dart';
+import '../services/storage_service.dart'; // IMPORTANTE: Importamos para verificar el estado de la sesión
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -17,8 +18,15 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      // Recuperamos el email transicional capturado en el registro
-      final String? userEmail = RegistrationService.temporaryEmail;
+      // 1. Intentamos recuperar el email desde los argumentos de la ruta primero (por si se pasa explícitamente)
+      final args = ModalRoute.of(context)?.settings.arguments;
+      String? userEmail;
+      if (args is String) {
+        userEmail = args;
+      }
+
+      // 2. Si no viene en argumentos, cae en el flujo transicional del registro/login anterior
+      userEmail ??= RegistrationService.temporaryEmail;
 
       if (userEmail == null) {
         _showSnackBar('No se encontró el correo de la sesión actual.', Colors.red);
@@ -31,23 +39,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        // Tu backend modificado ahora devuelve: { "url": "https://checkout.stripe.com/..." }
         final stripeUrl = response.data['url'];
 
         if (stripeUrl != null) {
           final Uri url = Uri.parse(stripeUrl);
           
-          // Abre de forma segura la pasarela web de Stripe en el navegador del dispositivo
           if (await canLaunchUrl(url)) {
             await launchUrl(url, mode: LaunchMode.externalApplication);
             
             if (mounted) {
               _showSnackBar('Abriendo pasarela de pago seguro...', Colors.green);
               
-              // REDIRECCIÓN COMPLETA: Una vez lanzada con éxito la respuesta, 
-              // limpiamos el historial de pantallas y lo mandamos al Dashboard/Home principal.
-              // (Si tu ruta se llama '/home' en vez de '/dashboard', cámbiala aquí)
-              Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+              // REDIRECCIÓN ADAPTATIVA: Si el usuario ya está logeado, lo mandamos al Dashboard.
+              // Si es un registro nuevo, lo mandamos al Login para que inicie sesión formalmente.
+              if (StorageService.userStateNotifier.value != UserState.guest) {
+                Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+              } else {
+                Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+              }
             }
           } else {
             _showSnackBar('No se pudo abrir la plataforma de Stripe.', Colors.red);
@@ -70,74 +79,94 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: col));
   }
 
+  /// Método centralizado para controlar la acción de ir hacia atrás
+  void _handleBackNavigation() {
+    // Verificamos si el usuario actual NO es un invitado (es decir, ya está logeado en el Dashboard)
+    if (StorageService.userStateNotifier.value != UserState.guest) {
+      // Si hay pantallas previas en el stack, hacemos un pop simple para preservar el estado del Dashboard
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+      }
+    } else {
+      // Flujo original de registro: destruye el árbol y regresa al Login
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0052CC),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // MODIFICADO: Botón superior izquierdo que destruye el flujo actual y regresa al Login
-            Positioned(
-              top: 10,
-              left: 10,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                onPressed: () {
-                  Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                },
+    return PopScope(
+      canPop: false, // Deshabilitamos el comportamiento por defecto del botón físico de Android
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBackNavigation(); // Ejecuta nuestra lógica adaptativa
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0052CC),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              // Botón superior izquierdo condicional
+              Positioned(
+                top: 10,
+                left: 10,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                  onPressed: _handleBackNavigation,
+                ),
               ),
-            ),
-            // Contenido original completamente intacto
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Metri GAS Premium ✨', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
-                  Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        children: [
-                          const Text('Estás a un paso de activar tu cuenta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 20),
-                          _buildBenefit(Icons.analytics, 'Análisis de consumo en tiempo real'),
-                          _buildBenefit(Icons.picture_as_pdf, 'Reportes descargables'),
-                          const SizedBox(height: 25),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: const Color(0xFFE6F0FF), borderRadius: BorderRadius.circular(12)),
-                            child: const Column(
-                              children: [
-                                Text('\$80 MXN', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF0044CC))),
-                                Text('por mes', style: TextStyle(color: Colors.grey)),
-                              ],
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Metri GAS Premium ✨', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 20),
+                    Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          children: [
+                            const Text('Estás a un paso de activar tu cuenta', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 20),
+                            _buildBenefit(Icons.analytics, 'Análisis de consumo en tiempo real'),
+                            _buildBenefit(Icons.picture_as_pdf, 'Reportes descargables'),
+                            const SizedBox(height: 25),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(color: const Color(0xFFE6F0FF), borderRadius: BorderRadius.circular(12)),
+                              child: const Column(
+                                children: [
+                                  Text('\$80 MXN', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF0044CC))),
+                                  Text('por mes', style: TextStyle(color: Colors.grey)),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 25),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF002266)),
-                              onPressed: _isProcessing ? null : _redirectStripeCheckout,
-                              child: _isProcessing 
-                                  ? const CircularProgressIndicator(color: Colors.white) 
-                                  : const Text('Proceder al pago seguro', style: TextStyle(color: Colors.white)),
+                            const SizedBox(height: 25),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF002266)),
+                                onPressed: _isProcessing ? null : _redirectStripeCheckout,
+                                child: _isProcessing 
+                                    ? const CircularProgressIndicator(color: Colors.white) 
+                                    : const Text('Proceder al pago seguro', style: TextStyle(color: Colors.white)),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
