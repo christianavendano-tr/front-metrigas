@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/auth_card_scaffold.dart';
 import 'verification_screen.dart';
+import 'meter_dashboard_screen.dart'; // TEMPORAL: solo para el botón de prueba
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -160,6 +161,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('Enviar enlace de recuperación', style: TextStyle(color: Colors.white, fontSize: 16)),
+              ),
+            ),
+            // --------------------------------------------------------------
+            // TEMPORAL: botón de prueba para ver MeterDashboardScreen sin
+            // depender todavía del Dashboard Principal real. Quitar este
+            // bloque cuando exista la navegación definitiva.
+            // --------------------------------------------------------------
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.grey),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MeterDashboardScreen()),
+                  );
+                },
+                child: const Text(
+                  '[TEMP] Ver Dashboard de Medidor',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
               ),
             ),
           ],
