@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/storage_service.dart';
-import '../services/session_service.dart'; 
-import 'meter_dashboard_screen.dart'; // O la ruta relativa correcta, ej: '../widgets/meter_dashboard_screen.dart'
+import '../services/session_service.dart';
+import '../services/meter_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,40 +13,81 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-// AGREGADO: 'with WidgetsBindingObserver' para escuchar cuando el usuario regresa a la App
-class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
+  List<Map<String, dynamic>> _medidores = [];
+  bool _isLoadingMeters = false;
 
   @override
   void initState() {
     super.initState();
-    // Registramos el observador del ciclo de vida
     WidgetsBinding.instance.addObserver(this);
     _sincronizarEstadoUsuario();
+    _cargarListadoMedidores();
   }
 
   @override
   void dispose() {
-    // Destruimos el observador al salir de la pantalla
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // SOLUCIÓN AL NAVEGADOR EXTERNO: Se ejecuta automáticamente al volver de Stripe/Navegador externo
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      debugPrint("La aplicación ha vuelto al primer plano. Sincronizando estado...");
       _sincronizarEstadoUsuario();
+      _cargarListadoMedidores();
     }
   }
 
-  /// Petición al Backend para leer el estado real de la base de datos
+  Future<void> _cargarListadoMedidores() async {
+    if (!mounted) return;
+    setState(() => _isLoadingMeters = true);
+
+    final lista = await MeterManager.obtenerMedidores();
+
+    if (mounted) {
+      setState(() {
+        _medidores = lista;
+        _isLoadingMeters = false;
+      });
+    }
+  }
+
+  Future<void> _inyectarMedidoresModoDev() async {
+    final medidor1 = {
+      "id": "e3b0c442-98fc-413b-9671-9a81817fc7e2",
+      "metername": "Cocina Principal",
+      "capacity": "20.0",
+      "ownerId": "invitado-local-id"
+    };
+    final medidor2 = {
+      "id": "f2a1d553-09eb-524c-8762-0b92928ed8f3",
+      "metername": "Calentador",
+      "capacity": "10.0",
+      "ownerId": "invitado-local-id"
+    };
+
+    await MeterManager.guardarMedidorLocal(medidor1);
+    await MeterManager.guardarMedidorLocal(medidor2);
+    await _cargarListadoMedidores();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔧 Modo Dev: Medidores UUID inyectados localmente.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
   Future<void> _sincronizarEstadoUsuario() async {
     if (StorageService.userStateNotifier.value == UserState.guest) return;
 
     try {
-      final token = SessionService.getToken(); 
-      final url = Uri.parse('http://localhost:3000/auth/profile'); 
+      final token = SessionService.getToken();
+      final url = Uri.parse('http://localhost:3000/auth/profile');
 
       final response = await http.get(
         url,
@@ -65,7 +106,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           final bool esSuscripcionActiva = userMap['isActive'] ?? false;
 
           StorageService.setMockState(
-            esSuscripcionActiva ? UserState.premiumActive : UserState.premiumInactive,
+            esSuscripcionActiva
+                ? UserState.premiumActive
+                : UserState.premiumInactive,
             name: nombreReal,
           );
         }
@@ -78,12 +121,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   void _cerrarSesion(BuildContext context) async {
     await StorageService.clearSession();
     if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+      Navigator.pushNamedAndRemoveUntil(
+          context, '/dashboard', (route) => false);
     }
   }
 
-  void _mostrarDialogoCancelar(BuildContext context, String? userName, String? userEmail) {
-    final TextEditingController confirmacionController = TextEditingController();
+  void _mostrarDialogoCancelar(
+      BuildContext context, String? userName, String? userEmail) {
+    final TextEditingController confirmacionController =
+        TextEditingController();
     bool esBotonHabilitado = false;
 
     showDialog(
@@ -92,8 +138,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              title: const Text('Cancelar Plan Premium', style: TextStyle(fontWeight: FontWeight.bold)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              title: const Text('Cancelar Plan Premium',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,7 +161,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     ),
                     onChanged: (text) {
                       setDialogState(() {
-                        esBotonHabilitado = text.trim().toLowerCase() == 'eliminar';
+                        esBotonHabilitado =
+                            text.trim().toLowerCase() == 'eliminar';
                       });
                     },
                   ),
@@ -122,20 +171,24 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Volver', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Volver',
+                      style: TextStyle(color: Colors.grey)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red[700],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6)),
                   ),
                   onPressed: esBotonHabilitado
                       ? () async {
-                          Navigator.pop(context); 
-                          await _ejecutarCancelacionSuscripcion(userName, userEmail);
+                          Navigator.pop(context);
+                          await _ejecutarCancelacionSuscripcion(
+                              userName, userEmail);
                         }
                       : null,
-                  child: const Text('Confirmar', style: TextStyle(color: Colors.white)),
+                  child: const Text('Confirmar',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -145,11 +198,13 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     );
   }
 
-  Future<void> _ejecutarCancelacionSuscripcion(String? userName, String? userEmail) async {
+  Future<void> _ejecutarCancelacionSuscripcion(
+      String? userName, String? userEmail) async {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder: (context) =>
+          const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -162,12 +217,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({
-          'email': userEmail, 
-        }),
+        body: jsonEncode({'email': userEmail}),
       );
 
-      if (mounted) Navigator.pop(context); 
+      if (mounted) Navigator.pop(context);
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         StorageService.setMockState(
@@ -177,24 +230,62 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Suscripción cancelada correctamente.'), backgroundColor: Colors.green),
+            const SnackBar(
+                content: Text('Suscripción cancelada correctamente.'),
+                backgroundColor: Colors.green),
           );
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error del servidor: ${response.statusCode}'), backgroundColor: Colors.red),
+            SnackBar(
+                content: Text('Error del servidor: ${response.statusCode}'),
+                backgroundColor: Colors.red),
           );
         }
       }
     } catch (e) {
-      if (mounted) Navigator.pop(context); 
+      if (mounted) Navigator.pop(context);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error de red al intentar cancelar.'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('Error de red al intentar cancelar.'),
+              backgroundColor: Colors.red),
         );
       }
     }
+  }
+
+  void _manejarAccionNuevoMedidor(
+      UserState estadoActual, String? userEmail) {
+    Navigator.pushNamed(context, '/add-meter', arguments: userEmail)
+        .then((_) {
+      _cargarListadoMedidores();
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // NAVEGACIÓN AL DASHBOARD INDIVIDUAL
+  // Pasa un Map con todos los campos que MeterDashboardScreen necesita:
+  //   hardwareId, alias, capacityLiters, isPremiumActive
+  // -----------------------------------------------------------------------
+  void _abrirMeterDashboard(
+      Map<String, dynamic> meter, bool isPremiumActive) {
+    final String hardwareId = meter['id']?.toString() ?? '';
+    final String alias = meter['metername']?.toString() ?? 'Medidor';
+    final double capacityLiters =
+        double.tryParse(meter['capacity']?.toString() ?? '20') ?? 20.0;
+
+    Navigator.pushNamed(
+      context,
+      '/meter-dashboard',
+      arguments: {
+        'hardwareId': hardwareId,
+        'alias': alias,
+        'capacityLiters': capacityLiters,
+        'isPremiumActive': isPremiumActive,
+      },
+    );
   }
 
   @override
@@ -207,20 +298,16 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         backgroundColor: const Color(0xFF0052CC),
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Text('Metri GAS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Metri GAS',
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
-        // SOLUCIÓN DE RESPALDO: Agregamos un botón manual de actualizar en la barra superior
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Actualizar Estado',
             onPressed: () async {
               await _sincronizarEstadoUsuario();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Estado de cuenta actualizado.'), duration: Duration(seconds: 1)),
-                );
-              }
+              await _cargarListadoMedidores();
             },
           ),
         ],
@@ -229,6 +316,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         valueListenable: StorageService.userStateNotifier,
         builder: (context, userState, child) {
           final String? userName = StorageService.userName;
+          final bool isPremiumActive =
+              userState == UserState.premiumActive;
 
           return Column(
             children: [
@@ -238,18 +327,37 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildPerfilSeccionCondicional(context, userState, userName, userEmail),
-                      
+                      _buildPerfilSeccionCondicional(
+                          context, userState, userName, userEmail),
                       const SizedBox(height: 24),
-                      const Text('MIS MEDIDORES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('MIS MEDIDORES',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16)),
+                          if (userState == UserState.guest)
+                            TextButton.icon(
+                              onPressed: _inyectarMedidoresModoDev,
+                              icon: const Icon(Icons.developer_mode,
+                                  size: 16, color: Colors.orange),
+                              label: const Text(
+                                  'Inyectar Medidores (Dev)',
+                                  style: TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 12)),
+                            ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
-
-                      _buildMedidoresSectionPlaceholder(userState),
+                      _buildSeccionMedidoresDinamica(isPremiumActive),
                     ],
                   ),
                 ),
               ),
-              _buildBotonEnlazarPlaceholder(),
+              _buildBotonEnlazarDinamico(userState, userEmail),
             ],
           );
         },
@@ -257,14 +365,195 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildPerfilSeccionCondicional(BuildContext context, UserState state, String? userName, String? userEmail) {
+  Widget _buildSeccionMedidoresDinamica(bool isPremiumActive) {
+    if (_isLoadingMeters) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_medidores.isEmpty) {
+      return Card(
+        color: Colors.white,
+        elevation: 1,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: const Padding(
+          padding: EdgeInsets.all(24.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: Text(
+              'Aún no tienes medidores enlazados.\nVincule un nuevo medidor a su cuenta para poder acceder a su monitoreo en tiempo real.',
+              textAlign: TextAlign.center,
+              style:
+                  TextStyle(color: Colors.grey, height: 1.4, fontSize: 13),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _medidores.length,
+      itemBuilder: (context, index) {
+        final meter = _medidores[index];
+        final String idHardware = meter['id']?.toString() ?? 'ID-UNK';
+        final String aliasHardware =
+            meter['metername']?.toString() ?? 'Medidor';
+        final String capacidad =
+            meter['capacity']?.toString() ?? '20';
+
+        // El porcentaje real vendrá de la telemetría en MeterDashboardScreen.
+        // Aquí se muestra un indicador neutro hasta que el usuario entre al
+        // dashboard individual. Se puede conectar al campo 'lastPercent'
+        // si el backend lo devuelve en el listado de medidores.
+        final double porcentajeGas =
+            double.tryParse(meter['lastPercent']?.toString() ?? '') ??
+                -1;
+        final bool tieneLectura = porcentajeGas >= 0;
+
+        return Card(
+          color: Colors.white,
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            // ---------------------------------------------------------------
+            // CORRECCIÓN PRINCIPAL: se pasa el Map completo con todos los
+            // campos que necesita MeterDashboardScreen.
+            // ---------------------------------------------------------------
+            onTap: () =>
+                _abrirMeterDashboard(meter, isPremiumActive),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        aliasHardware,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.black),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$capacidad L · ID: ${idHardware.length > 8 ? idHardware.substring(0, 8).toUpperCase() : idHardware.toUpperCase()}',
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 14),
+                  if (tieneLectura) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: porcentajeGas / 100,
+                              minHeight: 8,
+                              backgroundColor:
+                                  Colors.blue.withOpacity(0.2),
+                              valueColor:
+                                  const AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF0052CC)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '${porcentajeGas.round()}%',
+                          style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey),
+                        )
+                      ],
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: null, // indeterminate
+                              minHeight: 8,
+                              backgroundColor:
+                                  Colors.blue.withOpacity(0.1),
+                              valueColor:
+                                  const AlwaysStoppedAnimation<Color>(
+                                      Color(0xFFB0BEC5)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Sin lectura',
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey),
+                        )
+                      ],
+                    ),
+                  ]
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBotonEnlazarDinamico(UserState estado, String? email) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0052CC),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8)),
+            elevation: 2,
+          ),
+          onPressed: () => _manejarAccionNuevoMedidor(estado, email),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('Enlazar nuevo medidor',
+              style: TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPerfilSeccionCondicional(BuildContext context,
+      UserState state, String? userName, String? userEmail) {
     switch (state) {
       case UserState.guest:
         return _buildCardInvitado(context);
       case UserState.premiumActive:
-        return _buildCardPremium(context, esActivo: true, userName: userName, userEmail: userEmail);
+        return _buildCardPremium(context,
+            esActivo: true, userName: userName, userEmail: userEmail);
       case UserState.premiumInactive:
-        return _buildCardPremium(context, esActivo: false, userName: userName, userEmail: userEmail);
+        return _buildCardPremium(context,
+            esActivo: false, userName: userName, userEmail: userEmail);
     }
   }
 
@@ -272,7 +561,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     return Card(
       color: Colors.white,
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -280,15 +570,19 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             const Text(
               'Vuelvete premium y accede a las funciones completas',
               textAlign: TextAlign.center,
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style:
+                  TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 12),
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('• Historiales de consumo', style: TextStyle(color: Colors.grey)),
-                Text('• Predicciones con IA', style: TextStyle(color: Colors.grey)),
-                Text('• Pago rapido y seguro', style: TextStyle(color: Colors.grey)),
+                Text('• Historiales de consumo',
+                    style: TextStyle(color: Colors.grey)),
+                Text('• Predicciones con IA',
+                    style: TextStyle(color: Colors.grey)),
+                Text('• Pago rapido y seguro',
+                    style: TextStyle(color: Colors.grey)),
               ],
             ),
             const SizedBox(height: 16),
@@ -298,10 +592,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0052CC),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pushNamed(context, '/login'),
-                child: const Text('Volverme Premium', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('Volverme Premium',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold)),
               ),
             )
           ],
@@ -310,11 +608,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildCardPremium(BuildContext context, {required bool esActivo, required String? userName, required String? userEmail}) {
+  Widget _buildCardPremium(BuildContext context,
+      {required bool esActivo,
+      required String? userName,
+      required String? userEmail}) {
     return Card(
       color: Colors.white,
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -324,52 +626,61 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 const CircleAvatar(
                   radius: 26,
                   backgroundColor: Color(0xFF4285F4),
-                  child: Icon(Icons.person, size: 32, color: Colors.white),
+                  child:
+                      Icon(Icons.person, size: 32, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Nombre de usuario:', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                      Text(userName ?? 'Usuario Premium', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      const Text('Nombre de usuario:',
+                          style: TextStyle(
+                              color: Colors.grey, fontSize: 11)),
+                      Text(userName ?? 'Usuario Premium',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14)),
                     ],
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text('Subscripcion:', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                    const Text('Subscripcion:',
+                        style: TextStyle(
+                            color: Colors.grey, fontSize: 11)),
                     Text(
-                      esActivo ? 'ACTIVA' : 'INACTIVA', 
+                      esActivo ? 'ACTIVA' : 'INACTIVA',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold, 
-                        color: esActivo ? const Color(0xFF4285F4) : Colors.red,
-                        fontSize: 14
-                      ),
+                          fontWeight: FontWeight.bold,
+                          color: esActivo
+                              ? const Color(0xFF4285F4)
+                              : Colors.red,
+                          fontSize: 14),
                     ),
                   ],
                 ),
               ],
             ),
-            
             if (!esActivo) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
                 ),
                 child: const Text(
                   'Su suscripción no está activa. Si no paga en 1 mes se borrará toda su info de la BD',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ],
-
             const SizedBox(height: 16),
             Row(
               children: [
@@ -378,93 +689,50 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.grey[700],
                       side: BorderSide(color: Colors.grey[400]!),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
                     ),
                     onPressed: () => _cerrarSesion(context),
                     icon: const Icon(Icons.logout, size: 16),
-                    label: const Text('Salir', style: TextStyle(fontSize: 12)),
+                    label: const Text('Salir',
+                        style: TextStyle(fontSize: 12)),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: esActivo ? Colors.red[700] : const Color(0xFF0052CC),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      backgroundColor: esActivo
+                          ? Colors.red[700]
+                          : const Color(0xFF0052CC),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
                     ),
                     onPressed: () {
                       if (esActivo) {
-                        _mostrarDialogoCancelar(context, userName, userEmail);
+                        _mostrarDialogoCancelar(
+                            context, userName, userEmail);
                       } else {
-                        // Navegamos y al regresar (sea por pop o descarte) llamamos a la sincronización
-                        Navigator.pushNamed(
-                          context, 
-                          '/subscription', 
-                          arguments: userEmail
-                        ).then((_) => _sincronizarEstadoUsuario());
+                        Navigator.pushNamed(context, '/subscription',
+                                arguments: userEmail)
+                            .then((_) {
+                          _sincronizarEstadoUsuario();
+                          _cargarListadoMedidores();
+                        });
                       }
                     },
                     child: Text(
                       esActivo ? 'Cancelar Plan' : 'Pagar Mes',
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-////REEMPLAZAR POR DATOS REALES DE LA BASE DE DATOS, PERO POR AHORA USAMOS PLACEHOLDERS PARA PRUEBAS
-  Widget _buildMedidoresSectionPlaceholder(UserState userState) {
-    // Determinamos si el usuario actual tiene el premium activo según su estado
-    final bool isPremiumActive = userState == UserState.premiumActive;
-
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: ListTile(
-        leading: const Icon(Icons.gas_meter, color: Color(0xFF0052CC), size: 36),
-        title: const Text(
-          'Cocina Principal',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: const Text('ID: 3BC8E162 • 15 Litros'),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-        onTap: () {
-          // ENLAZAR AQUÍ: Navegación transfiriendo los parámetros exactos exigidos por el ticket
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => MeterDashboardScreen(
-                hardwareId: '3bc8e162-4217-4934-bc2c-5645367b1201',
-                alias: 'Cocina Principal',
-                capacityLiters: 15.0,
-                isPremiumActive: isPremiumActive, // Sincronizado dinámicamente con el estado de tu Dashboard
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildBotonEnlazarPlaceholder() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 50,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0052CC),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () {},
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('Enlazar nuevo medidor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       ),
     );
