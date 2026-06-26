@@ -1,5 +1,8 @@
+// lib/services/meter_telemetry_service.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:front_metrigas/services/session_service.dart';
 
 class TelemetryReading {
   final double percentAvailable;
@@ -21,33 +24,37 @@ class MeterTelemetryService {
   static const String _cloudBaseUrl = 'http://localhost:3000';
 
   Future<TelemetryReading?> fetchLatestReading(String hardwareId) async {
+    // 1. Intento mDNS local (falla silenciosamente si el usuario no está en casa)
     try {
       final local = await _fetchFromLocalMdns(hardwareId);
       if (local != null) return local;
-    } catch (_) {
-      // Esperado cuando el usuario no está en la misma red: se continúa con fallback.
+    } catch (e) {
+      debugPrint('📡 [Telemetry] mDNS falló (esperado fuera de casa): $e');
     }
 
+    // 2. Fallback: último log en la nube
     try {
       return await _fetchLastLogFromCloud(hardwareId);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('❌ [Telemetry] Fallback cloud también falló: $e');
       return null;
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // mDNS local
+  // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchFromLocalMdns(String hardwareId) async {
     final url = Uri.parse('http://metrigas-$hardwareId.local/api/status');
     final response = await http.get(url).timeout(_localTimeout);
 
     if (response.statusCode != 200) {
-      throw Exception('mDNS local respondió ${response.statusCode}');
+      throw Exception('mDNS respondió ${response.statusCode}');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final percent = _extractPercentage(data);
-    if (percent == null) {
-      throw const FormatException('Respuesta mDNS sin porcentaje válido');
-    }
+    if (percent == null) throw const FormatException('mDNS sin porcentaje válido');
 
     return TelemetryReading(
       percentAvailable: percent,
@@ -56,15 +63,28 @@ class MeterTelemetryService {
     );
   }
 
-  /// Fallback en la nube: usa GET /logs (prefijo real del controller NestJS),
-  /// NO /metrics. Pide page=1&limit=1 para obtener solo la lectura más reciente.
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fallback cloud: GET /logs?meterId=:id&page=1&limit=1
+  // Requiere token de sesión igual que el resto de endpoints protegidos.
+  // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchLastLogFromCloud(String hardwareId) async {
-    // CORREGIDO: era /metrics — el @Controller('logs') expone /logs
+    final token = SessionService.getToken();
     final url = Uri.parse(
       '$_cloudBaseUrl/logs?meterId=$hardwareId&page=1&limit=1',
     );
 
-    final response = await http.get(url).timeout(_cloudTimeout);
+    debugPrint('🔍 [Telemetry] GET $url');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
+    ).timeout(_cloudTimeout);
+
+    debugPrint('🔍 [Telemetry] Status: ${response.statusCode}');
+    debugPrint('🔍 [Telemetry] Body:   ${response.body}');
 
     if (response.statusCode != 200) {
       throw Exception('GET /logs respondió ${response.statusCode}');
@@ -72,17 +92,22 @@ class MeterTelemetryService {
 
     final decoded = jsonDecode(response.body);
     final entry = _firstEntryFrom(decoded);
+
     if (entry == null) {
-      throw const FormatException('GET /logs no devolvió registros');
+      debugPrint('⚠️ [Telemetry] /logs no devolvió registros para $hardwareId');
+      return null;
     }
 
     final percent = _extractPercentage(entry);
     if (percent == null) {
-      throw const FormatException('Último log sin currentPercentage válido');
+      debugPrint('⚠️ [Telemetry] Entrada sin currentPercentage: $entry');
+      return null;
     }
 
-    final rawDate = entry['meditionDate'];
+    final rawDate = entry['meditionDate'] ?? entry['createdAt'] ?? entry['timestamp'];
     final timestamp = rawDate is String ? DateTime.tryParse(rawDate) : null;
+
+    debugPrint('✅ [Telemetry] Lectura cloud: $percent% @ $timestamp');
 
     return TelemetryReading(
       percentAvailable: percent,
@@ -91,26 +116,56 @@ class MeterTelemetryService {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helpers de parsing — tolerantes a distintas estructuras de respuesta
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Extrae el primer objeto de log de cualquier estructura que devuelva NestJS:
+  ///   [ {...} ]                          → lista directa
+  ///   { data: [ {...} ] }                → paginación plana
+  ///   { data: { items: [ {...} ] } }     → paginación anidada
+  ///   { data: { data: [ {...} ] } }      → variante de paginación
   Map<String, dynamic>? _firstEntryFrom(dynamic decoded) {
+    // Lista directa
+    if (decoded is List && decoded.isNotEmpty) {
+      return decoded.first as Map<String, dynamic>?;
+    }
+
     if (decoded is! Map<String, dynamic>) return null;
+
     final data = decoded['data'];
 
     if (data is List && data.isNotEmpty) {
-      return data.first as Map<String, dynamic>;
+      return data.first as Map<String, dynamic>?;
     }
+
     if (data is Map<String, dynamic>) {
-      final items = data['items'] ?? data['data'];
-      if (items is List && items.isNotEmpty) {
-        return items.first as Map<String, dynamic>;
+      for (final key in ['items', 'data', 'logs', 'results']) {
+        final inner = data[key];
+        if (inner is List && inner.isNotEmpty) {
+          return inner.first as Map<String, dynamic>?;
+        }
       }
     }
+
     return null;
   }
 
+  /// Extrae el porcentaje del sensor probando los nombres de campo más comunes.
   double? _extractPercentage(Map<String, dynamic> json) {
-    final raw = json['currentPercentage'];
-    if (raw == null) return null;
-    if (raw is num) return raw.toDouble();
-    return double.tryParse(raw.toString());
+    for (final key in [
+      'currentPercentage',
+      'percent',
+      'percentage',
+      'level',
+      'percentAvailable',
+    ]) {
+      final raw = json[key];
+      if (raw == null) continue;
+      if (raw is num) return raw.toDouble();
+      final parsed = double.tryParse(raw.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
   }
 }
