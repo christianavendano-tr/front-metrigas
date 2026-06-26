@@ -1,26 +1,45 @@
 // lib/services/session_service.dart
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jwt_decoder/jwt_decoder.dart'; // <-- Importación indispensable
 
 class SessionService {
-  // Variable en memoria privada para almacenar el token JWT
+  static const String _tokenKey = 'jwt_access_token';
   static String? _accessToken;
 
-  // Método para guardar el token desde la pantalla de Login
-  static void saveToken(String token) {
-    _accessToken = token;
+  /// Carga el token guardado del disco a la memoria RAM al arrancar la app
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _accessToken = prefs.getString(_tokenKey);
   }
 
-  // Método para obtener el token desde cualquier parte de la app
+  /// Guarda el token de forma persistente
+  static Future<void> saveToken(String token) async {
+    _accessToken = token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
+  }
+
   static String? getToken() {
     return _accessToken;
   }
 
-  // Método para verificar si el usuario tiene una sesión activa
+  /// Verifica de forma segura si el token actual sigue vigente
   static bool hasSession() {
-    return _accessToken != null;
+    if (_accessToken == null || _accessToken!.isEmpty) return false;
+
+    try {
+      // Si JwtDecoder dice que está expirado, retorna false
+      return !JwtDecoder.isExpired(_accessToken!);
+    } catch (e) {
+      // Si el token está corrupto o mal formado, lo toma como sesión no válida
+      return false;
+    }
   }
 
-  // Método para cerrar sesión borrando la memoria
-  static void clearSession() {
+  /// Borra el token por completo del teléfono
+  static Future<void> clearSession() async {
     _accessToken = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
   }
 }

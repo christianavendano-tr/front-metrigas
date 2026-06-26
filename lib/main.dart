@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/storage_service.dart';
+import 'services/session_service.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
@@ -13,13 +14,8 @@ import 'screens/meter_dashboard_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await StorageService.init();
+  await SessionService.init();
   
-  // === CONFIGURACIÓN DE PRUEBA (MOCK) ===
-  // Descomenta la línea que quieras probar para ver cómo muta el Dashboard automáticamente:
-  StorageService.setMockState(UserState.guest);
-  // StorageService.setMockState(UserState.premiumActive, name: "Carlita Wishes");
-  // StorageService.setMockState(UserState.premiumInactive, name: "Carlita Wishes");
-  // ======================================
 
   runApp(const MetriGasApp());
 }
