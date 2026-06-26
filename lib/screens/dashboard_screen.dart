@@ -264,11 +264,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     });
   }
 
-  // -----------------------------------------------------------------------
-  // NAVEGACIÓN AL DASHBOARD INDIVIDUAL
-  // Pasa un Map con todos los campos que MeterDashboardScreen necesita:
-  //   hardwareId, alias, capacityLiters, isPremiumActive
-  // -----------------------------------------------------------------------
   void _abrirMeterDashboard(
       Map<String, dynamic> meter, bool isPremiumActive) {
     final String hardwareId = meter['id']?.toString() ?? '';
@@ -408,15 +403,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         final String capacidad =
             meter['capacity']?.toString() ?? '20';
 
-        // El porcentaje real vendrá de la telemetría en MeterDashboardScreen.
-        // Aquí se muestra un indicador neutro hasta que el usuario entre al
-        // dashboard individual. Se puede conectar al campo 'lastPercent'
-        // si el backend lo devuelve en el listado de medidores.
-        final double porcentajeGas =
-            double.tryParse(meter['lastPercent']?.toString() ?? '') ??
-                -1;
-        final bool tieneLectura = porcentajeGas >= 0;
-
         return Card(
           color: Colors.white,
           margin: const EdgeInsets.only(bottom: 12),
@@ -425,92 +411,43 @@ class _DashboardScreenState extends State<DashboardScreen>
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            // ---------------------------------------------------------------
-            // CORRECCIÓN PRINCIPAL: se pasa el Map completo con todos los
-            // campos que necesita MeterDashboardScreen.
-            // ---------------------------------------------------------------
             onTap: () =>
                 _abrirMeterDashboard(meter, isPremiumActive),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        aliasHardware,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.black),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$capacidad L · ID: ${idHardware.length > 8 ? idHardware.substring(0, 8).toUpperCase() : idHardware.toUpperCase()}',
-                    style:
-                        const TextStyle(color: Colors.grey, fontSize: 13),
-                  ),
-                  const SizedBox(height: 14),
-                  if (tieneLectura) ...[
-                    Row(
+                  // Lado Izquierdo: Información textual e icono de visualización
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: porcentajeGas / 100,
-                              minHeight: 8,
-                              backgroundColor:
-                                  Colors.blue.withOpacity(0.2),
-                              valueColor:
-                                  const AlwaysStoppedAnimation<Color>(
-                                      Color(0xFF0052CC)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
                         Text(
-                          '${porcentajeGas.round()}%',
+                          aliasHardware,
                           style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey),
-                        )
-                      ],
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: null, // indeterminate
-                              minHeight: 8,
-                              backgroundColor:
-                                  Colors.blue.withOpacity(0.1),
-                              valueColor:
-                                  const AlwaysStoppedAnimation<Color>(
-                                      Color(0xFFB0BEC5)),
-                            ),
-                          ),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.black),
                         ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Sin lectura',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey),
-                        )
+                        const SizedBox(height: 4),
+                        Text(
+                          '$capacidad L - ID: ${idHardware.length > 8 ? idHardware.substring(0, 8).toUpperCase() : idHardware.toUpperCase()}',
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                        const SizedBox(height: 12),
+                        const Icon(
+                          Icons.visibility,
+                          color: Color(0xFF529CFA),
+                          size: 26,
+                        ),
                       ],
                     ),
-                  ]
+                  ),
+                  const SizedBox(width: 16),
+                  // Lado Derecho: Icono de medidor animado de forma independiente
+                  const _AnimatedMeterIcon(),
                 ],
               ),
             ),
@@ -735,6 +672,62 @@ class _DashboardScreenState extends State<DashboardScreen>
           ],
         ),
       ),
+    );
+  }
+}
+
+// =============================================================================
+// WIDGET DECORATIVO INDEPENDIENTE (MEDIDOR ANIMADO SIN DEPENDENCIAS DE DATOS)
+// =============================================================================
+class _AnimatedMeterIcon extends StatefulWidget {
+  const _AnimatedMeterIcon();
+
+  @override
+  State<_AnimatedMeterIcon> createState() => _AnimatedMeterIconState();
+}
+
+class _AnimatedMeterIconState extends State<_AnimatedMeterIcon>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Controla un bucle infinito que simula la oscilación real del medidor
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        // Hace rotar levemente el widget de izquierda a derecha de forma suave
+        return Transform.rotate(
+          angle: _controller.value * 0.16 - 0.08, 
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF529CFA).withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.speed,
+              size: 54,
+              color: Color(0xFF529CFA),
+            ),
+          ),
+        );
+      },
     );
   }
 }

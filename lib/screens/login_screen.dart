@@ -40,11 +40,12 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = jsonDecode(response.body);
         String token = data['accessToken'];
 
-        SessionService.saveToken(token);
+        // 1. Guardamos el token de forma asíncrona y persistente en el dispositivo
+        await SessionService.saveToken(token);
 
         String nombreReal = 'Usuario Premium';
         bool esSuscripcionActiva = false;
-        String? serverUserId; // <-- Guardará el UUID real de la BD
+        String? serverUserId; // <-- Guarda el UUID real de la BD
 
         if (data['user'] != null) {
           nombreReal = data['user']['username'] ?? 'Usuario Premium';
@@ -56,13 +57,15 @@ class _LoginScreenState extends State<LoginScreen> {
             ? UserState.premiumActive 
             : UserState.premiumInactive;
 
-        StorageService.setMockState(
+        // 2. Guardamos el estado del usuario e incluimos el 'email' para que persista al reiniciar
+        await StorageService.setMockState(
           estadoFinalUsuario, 
-          name: nombreReal, 
+          name: nombreReal,
+          email: _emailController.text.trim(),
         );
 
         // =======================================================================
-        // ENTRADA SEGURO A LA MIGRACIÓN PASANDO EL UUID DEL USUARIO LOGGEADO
+        // ENTRADA SEGURO A LA MIGRACIÓN PASANDO EL UUID DEL USUARIO LOGGEADO (INTACTO)
         // =======================================================================
         try {
           await MeterManager.migrarMedidoresLocalesAlServidor(serverUserId);
@@ -80,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
             context, 
             '/dashboard', 
             (route) => false,
-            arguments: _emailController.text.trim(), 
+            arguments: _emailController.text.trim(),
           );
         }
       } else if (response.statusCode == 401) {
@@ -108,6 +111,63 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _mostrarTerminosPopUp(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Text(
+            'Aviso de Privacidad y Términos y Condiciones',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: const SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'METRIGAS\nAviso de Privacidad y Términos y Condiciones\nÚltima actualización: junio de 2026\n',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black),
+                  ),
+                  Text(
+                    'Al crear una cuenta se dan por aceptados los siguientes terminos:\n\n'
+                    'Datos personales que recabamos y su finalidad\n'
+                    'En Metrigas, recabamos datos de identificación (nombre, correo, edad) y datos financieros (procesados exclusivamente por Stripe) para gestionar su cuenta, vincular sus medidores, habilitar el historial de consumo para usuarios Premium, procesar pagos y brindar soporte técnico.\n\n'
+                    'Derechos ARCO (Acceso, Rectificación, Cancelación y Oposición)\n'
+                    'Usted, como titular de los datos personales, tiene derecho a conocer qué datos tenemos de usted, para qué los utilizamos y las condiciones de su uso (Acceso). Asimismo, es su derecho solicitar la corrección de su información personal si está desactualizada, es inexacta o incompleta (Rectificación); que la eliminemos de nuestros registros cuando considere que no se está utilizando adecuadamente (Cancelación); así como oponerse al uso de sus datos personales para fines específicos (Oposición).\n\n'
+                    'Para el ejercicio de estos derechos, deberá enviar una solicitud al correo electrónico: privacidad@metrigas.com, incluyendo nombre completo, documento de identidad, y una descripción clara de los datos sobre los que desea ejercer su derecho. Metrigas responderá en un plazo máximo de 20 días hábiles.\n\n'
+                    'Alertas de Nivel de Gas y Datos de Consumo\n'
+                    'Asi como parte del servicio, Metrigas utiliza los datos de consumo captados por su medidor para generar alertas automáticas. Por defecto, usted recibirá una notificación de existir una fuga de gas que provoque que el nivel del tanque descienda por debajo del 10% antes de que el sistema pueda detectarla, transmitirla o notificarla, Metrigas no será responsable por dicha situación ni por los daños, pérdidas o accidentes que de ella se deriven. El medidor no sustituye la inspección física periódica del tanque ni los mecanismos de seguridad y detección de fugas exigidos por la normatividad aplicable.\n\n'
+                    'Propiedad Intelectual\n'
+                    'Todo el software, código fuente, logotipos, gráficos, interfaces de usuario y algoritmos (incluyendo el generador congruencial de encriptación utilizado en nuestro firmware) son propiedad exclusiva de Metrigas. Queda prohibida la reproducción, copia, distribución o ingeniería inversa del sistema sin autorización expresa por escrito de los titulares.\n\n'
+                    'Modificaciones al Aviso\n'
+                    'Este Aviso de Privacidad y los presentes Términos y Condiciones podrán ser modificados por Metrigas para cumplir con cambios legislativos. Dichas actualizaciones estarán disponibles en nuestra aplicación móvil en el apartado correspondiente. El uso continuo de la aplicación constituye la aceptación de las versiones vigentes.\n\n'
+                    'Jurisdicción\n'
+                    'Para cualquier controversia derivada del uso de nuestros servicios, el usuario se somete a la jurisdicción de los tribunales competentes en la ciudad de Santiago de Querétaro, Querétaro.\n\n'
+                    'Al continuar usando la aplicación de Metrigas, usted confirma que ha leído y acepta el presente Aviso de Privacidad y Términos y Condiciones.',
+                    style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Entendido', 
+                style: TextStyle(color: Color(0xFF0052CC), fontWeight: FontWeight.bold)
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -243,10 +303,38 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(
+                                style: const TextStyle(color: Colors.black, fontSize: 12, height: 1.4),
+                                children: [
+                                  const TextSpan(text: 'Al continuar, aceptas nuestros '),
+                                  TextSpan(
+                                    text: 'Términos y Condiciones y Aviso de Privacidad',
+                                    style: const TextStyle(
+                                      color: Color(0xFF0052CC),
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () => _mostrarTerminosPopUp(context),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
                           TextButton.icon(
-                            onPressed: () {
-                              StorageService.setMockState(UserState.guest);
-                              Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+                            onPressed: () async {
+                              // Cambiado a asíncrono para asegurar el guardado persistente del estado "guest"
+                              await StorageService.setMockState(UserState.guest);
+                              if (context.mounted) {
+                                Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+                              }
                             },
                             icon: const Icon(Icons.arrow_back, size: 16, color: Color(0xFF0052CC)),
                             label: const Text(
