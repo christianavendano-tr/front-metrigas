@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
           esSuscripcionActiva = data['user']['isActive'] ?? false;
           serverUserId = data['user']['id']?.toString(); // <-- EXTRAEMOS EL UUID REAL
         }
-
+  
         UserState estadoFinalUsuario = esSuscripcionActiva 
             ? UserState.premiumActive 
             : UserState.premiumInactive;

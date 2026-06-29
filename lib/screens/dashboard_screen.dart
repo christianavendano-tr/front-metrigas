@@ -110,6 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ? UserState.premiumActive
                 : UserState.premiumInactive,
             name: nombreReal,
+            email: userMap['email'] ?? StorageService.userEmail,
           );
         }
       }
@@ -286,7 +287,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
-    final String? userEmail = args is String ? args : null;
+    final String? userEmail = args is String ? args : StorageService.userEmail;;
 
     return Scaffold(
       appBar: AppBar(
