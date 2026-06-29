@@ -1,9 +1,10 @@
-// lib/screens/meter_dashboard_screen.dart
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import '../services/meter_manager.dart';
 import '../services/storage_service.dart';
-import 'meter_telemetry_service.dart';
+import '../services/meter_telemetry_service.dart';
+// Agregar esta línea (asumiendo que están en la misma carpeta screens):
+import 'meter_history_screen.dart';
 
 /// Dashboard individual de un medidor de gas.
 ///
@@ -222,46 +223,48 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
     final double restantes = _litrosRestantes(_capacityLiters, percentSensor);
     final double consumidos = _litrosConsumidos(_capacityLiters, restantes);
 
-    return ValueListenableBuilder<UserState>(
-      // Re-dibuja si el estado de suscripción cambia en background
-      valueListenable: StorageService.userStateNotifier,
-      builder: (context, _, __) {
-        return Stack(
+    // El Scaffold está FUERA del ValueListenableBuilder para que el context
+    // del Navigator siempre tenga acceso a las rutas registradas en MaterialApp.
+    // El ValueListenableBuilder solo envuelve la fila de acciones que necesita
+    // reaccionar al cambio de estado de suscripción.
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
           children: [
-            Scaffold(
-              backgroundColor: Colors.white,
-              body: SafeArea(
-                bottom: false,
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    _buildSubHeader(context),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-                        child: Column(
-                          children: [
-                            // ── Dona circular ──────────────────────────
-                            _buildGaugeWithLegend(percentSensor, sinLectura),
-                            const SizedBox(height: 22),
+            Column(
+              children: [
+                _buildHeader(),
+                _buildSubHeader(context),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                    child: Column(
+                      children: [
+                        // ── Dona circular ────────────────────────────
+                        _buildGaugeWithLegend(percentSensor, sinLectura),
+                        const SizedBox(height: 22),
 
-                            // ── Tarjetas de litros (motor de cálculo) ──
-                            _buildLitersSummary(restantes, consumidos, sinLectura),
-                            const SizedBox(height: 20),
+                        // ── Tarjetas de litros (motor de cálculo) ────
+                        _buildLitersSummary(restantes, consumidos, sinLectura),
+                        const SizedBox(height: 20),
 
-                            // ── Banner de alerta ───────────────────────
-                            _buildAlertBanner(percentSensor, sinLectura),
-                            const SizedBox(height: 28),
+                        // ── Banner de alerta ─────────────────────────
+                        _buildAlertBanner(percentSensor, sinLectura),
+                        const SizedBox(height: 28),
 
-                            // ── Fila de acciones ───────────────────────
-                            _buildActionRow(context),
-                          ],
+                        // ── Fila de acciones — solo esta parte escucha
+                        //    cambios de UserState
+                        ValueListenableBuilder<UserState>(
+                          valueListenable: StorageService.userStateNotifier,
+                          builder: (_, __, ___) => _buildActionRow(context),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
 
             // Overlay de carga inicial (sin lectura previa)
@@ -275,12 +278,12 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
 
             // Overlay de eliminación
             if (_isDeleting)
-              Positioned.fill(
+              const Positioned.fill(
                 child: ColoredBox(
-                  color: const Color(0x88000000),
+                  color: Color(0x88000000),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
+                    children: [
                       CircularProgressIndicator(color: Colors.white),
                       SizedBox(height: 16),
                       Text(
@@ -292,8 +295,8 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
                 ),
               ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -590,25 +593,28 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
           onTap: _isLoading || _isDeleting ? null : _loadTelemetry,
         ),
 
-        // Botón 2: Historial (con paywall)
+      // Botón 2: Historial (con paywall)
         _ActionButton(
           icon: desbloqueado ? Icons.history : Icons.lock,
           label: 'Historial\nde uso',
           backgroundColor: const Color(0xFF0B2F6B),
           isLocked: !desbloqueado,
           onTap: desbloqueado
-              ? () => Navigator.pushNamed(
+              ? () => Navigator.push(
                     context,
-                    '/meter-history',
-                    arguments: {
-                      'hardwareId': _hardwareId,
-                      'alias': _alias,
-                      'capacityLiters': _capacityLiters,
-                    },
+                    MaterialPageRoute(
+                      builder: (context) => const MeterHistoryScreen(),
+                      settings: RouteSettings(
+                        arguments: {
+                          'hardwareId': _hardwareId,
+                          'alias': _alias,
+                          'capacityLiters': _capacityLiters,
+                        },
+                      ),
+                    ),
                   )
               : () => _mostrarPaywallSnack(context),
         ),
-
         // Botón 3: Eliminar medidor
         _ActionButton(
           icon: Icons.delete_outline,
