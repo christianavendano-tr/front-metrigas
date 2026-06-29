@@ -14,8 +14,18 @@ import 'screens/add_meter_bt_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SessionService.init();
+import 'screens/meter_history_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await StorageService.init();
   
+  // === CONFIGURACIÓN DE PRUEBA (MOCK) ===
+  // Descomenta la línea que quieras probar para ver cómo muta el Dashboard automáticamente:
+  StorageService.setMockState(UserState.guest);
+  // StorageService.setMockState(UserState.premiumActive, name: "Carlita Wishes");
+  // StorageService.setMockState(UserState.premiumInactive, name: "Carlita Wishes");
+  // ======================================
 
   runApp(const MetriGasApp());
 }
@@ -33,19 +43,19 @@ class MetriGasApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFE5E5E5),
         useMaterial3: true,
       ),
-      // Si es la primera vez muestra Bienvenida, sino va directo al Dashboard
       initialRoute: StorageService.isFirstTime ? '/welcome' : '/dashboard',
       routes: {
-        '/welcome':      (context) => const WelcomeScreen(),
-        '/dashboard':    (context) => const DashboardScreen(),
-        '/login':        (context) => const LoginScreen(),
-        '/register':     (context) => const RegisterScreen(),
-        '/verify':       (context) => const VerificationScreen(),
-        '/subscription': (context) => const SubscriptionScreen(),
-        '/forgot': (context) => const ForgotPasswordScreen(),
+        '/welcome':         (context) => const WelcomeScreen(),
+        '/dashboard':       (context) => const DashboardScreen(),
+        '/login':           (context) => const LoginScreen(),
+        '/register':        (context) => const RegisterScreen(),
+        '/verify':          (context) => const VerificationScreen(),
+        '/subscription':    (context) => const SubscriptionScreen(),
+        '/forgot':          (context) => const ForgotPasswordScreen(),
         '/meter-dashboard': (context) => const MeterDashboardScreen(),
         '/add-meter': (context) => const AddMeterBtScreen(),
 
+        '/meter-history':   (context) => const MeterHistoryScreen(),
       },
     );
   }
