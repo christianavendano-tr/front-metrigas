@@ -9,6 +9,11 @@ import 'screens/verification_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/meter_dashboard_screen.dart';
+import 'screens/add_meter_bt_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SessionService.init();
 import 'screens/meter_history_screen.dart';
 
 void main() async {
@@ -48,6 +53,8 @@ class MetriGasApp extends StatelessWidget {
         '/subscription':    (context) => const SubscriptionScreen(),
         '/forgot':          (context) => const ForgotPasswordScreen(),
         '/meter-dashboard': (context) => const MeterDashboardScreen(),
+        '/add-meter': (context) => const AddMeterBtScreen(),
+
         '/meter-history':   (context) => const MeterHistoryScreen(),
       },
     );
