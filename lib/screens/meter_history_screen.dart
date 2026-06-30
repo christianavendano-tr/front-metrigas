@@ -1,6 +1,4 @@
-// lib/screens/meter_history_screen.dart
-//
-// Historial mensual de un medidor de gas.
+// // Historial mensual de un medidor de gas.
 // Endpoint: POST /logs/monthly  (Bearer Token)
 // Body:     { "meterId": "...", "month": 6, "year": 2026 }
 //
@@ -8,7 +6,6 @@
 //   'hardwareId'     : String
 //   'alias'          : String
 //   'capacityLiters' : double
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -46,47 +43,22 @@ class _MonthlyMetrics {
     this.message,
   });
 
- factory _MonthlyMetrics.fromJson(Map<String, dynamic> rawJson) {
+  factory _MonthlyMetrics.fromJson(Map<String, dynamic> rawJson) {
     final j = rawJson.containsKey('data') ? rawJson['data'] : rawJson;
-    
-    // Obtenemos los datos mensuales acumulados que manda tu backend
-    final datosMensuales = j['datos_mensuales'] as List? ?? [];
-    
-    List<_ChartPoint> points = [];
-    List<_Log> fakeLogs = [];
-
-    if (datosMensuales.isNotEmpty) {
-      points = datosMensuales.map((e) {
-        final mapa = e as Map<String, dynamic>;
-        // 📊 Si el backend manda 'mes', usamos una barra representativa para ese periodo
-        return _ChartPoint(
-          day: (mapa['mes'] as num?)?.toInt() ?? 6, 
-          value: _n(mapa['porcentaje_promedio'] ?? mapa['consumo']),
-        );
-      }).toList();
-
-      // Inyectamos un punto en los logs para que la UI no se limpie por "Arreglo Vacío"
-      fakeLogs = [
-        _Log(
-          date: DateTime(2026, (j['mes'] as num?)?.toInt() ?? 6, 26), 
-          percentage: _n(j['porcentaje_promedio']),
-        )
-      ];
-    }
 
     return _MonthlyMetrics(
-      month: (j['mes'] as num?)?.toInt() ?? 6,
-      year:  (j['anio'] as num?)?.toInt() ?? 2026,
-      totalConsumption:  _n(j['consumo_total']),
-      averagePercentage: _n(j['porcentaje_promedio']),
-      standardDeviation: 0.0,
-      lowerBound:        0.0,
-      upperBound:        0.0,
-      activeDays:        datosMensuales.length,
-      logs:              fakeLogs, // Evita el contenedor vacío de dispersión
-      chartData:         points,   // Pinta la barra de Junio
-      outliers:          [],
-      message:    rawJson['message']?.toString() ?? 'Sincronizado',
+      month:             (j['month']  as num?)?.toInt() ?? 6,
+      year:              (j['year']   as num?)?.toInt() ?? 2026,
+      totalConsumption:  _n(j['totalConsumption']),
+      averagePercentage: _n(j['averagePercentage']),
+      standardDeviation: _n(j['standardDeviation']),
+      lowerBound:        _n(j['lowerBound']),
+      upperBound:        _n(j['upperBound']),
+      activeDays:        (j['activeDays'] as num?)?.toInt() ?? 0,
+      logs:       _parseList(j['logs'],      _Log.fromJson),
+      chartData:  _parseList(j['chartData'], _ChartPoint.fromJson),
+      outliers:   _parseList(j['outliers'],  _Log.fromJson),
+      message:    j['message']?.toString(),
     );
   }
 
@@ -101,9 +73,7 @@ class _MonthlyMetrics {
     if (raw is! List) return [];
     return raw.map((e) => fn(e as Map<String, dynamic>)).toList();
   }
-} // <--- ESTA LLAVE CIERRA EXACTAMENTE _MonthlyMetrics
-
-// A partir de aquí, las demás clases quedan afuera en el nivel superior (Top-level):
+}
 
 class _Log {
   final DateTime date;
@@ -112,8 +82,8 @@ class _Log {
   const _Log({required this.date, required this.percentage});
 
   factory _Log.fromJson(Map<String, dynamic> j) => _Log(
-        date: DateTime.tryParse(j['meditionDate']?.toString() ?? '') ?? DateTime.now(),
-        percentage: (j['currentPercentage'] as num?)?.toDouble() ?? 0,
+        date: DateTime.tryParse(j['date']?.toString() ?? '') ?? DateTime.now(),
+        percentage: (j['percentage'] as num?)?.toDouble() ?? 0.0,
       );
 }
 
@@ -124,8 +94,8 @@ class _ChartPoint {
   const _ChartPoint({required this.day, required this.value});
 
   factory _ChartPoint.fromJson(Map<String, dynamic> j) => _ChartPoint(
-        day:   (j['day']   as num?)?.toInt()    ?? 0,
-        value: (j['currentPercentage'] ?? j['value'] as num?)?.toDouble() ?? 0,
+        day:   (j['day'] as num?)?.toInt() ?? 0,
+        value: (j['value'] as num?)?.toDouble() ?? 0.0,
       );
 }
 
@@ -149,28 +119,28 @@ class _AIPrediction {
   bool get hasPrediction => daysRemaining != null;
 
   factory _AIPrediction.fromJson(Map<String, dynamic> j) {
-    final pred = j['prediction'] as Map<String, dynamic>?;
+    final root = j.containsKey('data') ? j['data'] as Map<String, dynamic> : j;
+    final pred = root['prediction'] as Map<String, dynamic>?;
     return _AIPrediction(
-      meterId:                  j['meterId']?.toString() ?? '',
-      estimatedRechargeDate:    pred?['estimatedRechargeDate']?.toString(),
-      daysRemaining:            (pred?['daysRemaining'] as num?)?.toInt(),
+      meterId: root['meterId']?.toString() ?? '',
+      estimatedRechargeDate: pred?['estimatedRechargeDate']?.toString(),
+      daysRemaining: (pred?['daysRemaining'] as num?)?.toInt(),
       estimatedConsumptionRate: pred?['estimatedConsumptionRate']?.toString(),
-      confidenceScore:          (pred?['confidenceScore'] as num?)?.toDouble(),
-      message:                  j['message']?.toString(),
+      confidenceScore: (pred?['confidenceScore'] as num?)?.toDouble(),
+      message: root['message']?.toString(),
     );
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantalla Principal
 // ─────────────────────────────────────────────────────────────────────────────
 class MeterHistoryScreen extends StatefulWidget {
   const MeterHistoryScreen({super.key});
 
-  static const Color primaryBlue    = Color(0xFF0052CC);
-  static const Color lightBlue      = Color(0xFF3B82E0);
+  static const Color primaryBlue = Color(0xFF0052CC);
+  static const Color lightBlue = Color(0xFF3B82E0);
   static const Color availableGreen = Color(0xFF7CB342);
-  static const String _baseUrl      = 'http://localhost:3000';
+  static const String _baseUrl = 'http://localhost:3000';
 
   @override
   State<MeterHistoryScreen> createState() => _MeterHistoryScreenState();
@@ -185,14 +155,14 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
   late int _selectedMonth;
   late int _selectedYear;
 
-  bool             _isLoading = true;
-  String?          _error;
+  bool _isLoading = true;
+  String? _error;
   _MonthlyMetrics? _metrics;
 
-  bool           _aiLoading   = false;
-  String?        _aiError;
+  bool _aiLoading = false;
+  String? _aiError;
   _AIPrediction? _aiPrediction;
-  bool           _aiRequested = false;
+  bool _aiRequested = false;
 
   static const List<String> _mesesNombres = [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -210,79 +180,99 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
   }
 
   void _resolveParams() {
-    final now      = DateTime.now();
+    final now = DateTime.now();
     _selectedMonth = now.month;
-    _selectedYear  = now.year;
+    _selectedYear = now.year;
 
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
-      _hardwareId     = args['hardwareId']?.toString()     ?? '';
-      _alias          = args['alias']?.toString()          ?? 'Medidor';
+      _hardwareId = args['hardwareId']?.toString() ?? '';
+      _alias = args['alias']?.toString() ?? 'Medidor';
       _capacityLiters = args['capacityLiters'] is num
           ? (args['capacityLiters'] as num).toDouble()
           : double.tryParse(args['capacityLiters']?.toString() ?? '') ?? 20.0;
     } else {
-      _hardwareId     = '';
-      _alias          = 'Medidor';
+      _hardwareId = '';
+      _alias = 'Medidor';
       _capacityLiters = 20.0;
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // MANEJADOR DE CAMBIO DE FILTRO CON LIMPIEZA INMEDIATA
+  // MANEJADOR DE CAMBIO DE FILTRO
   // ─────────────────────────────────────────────────────────────────────────
   void _onMonthChanged(int? newMonth) {
     if (newMonth == null || newMonth == _selectedMonth) return;
 
     setState(() {
       _selectedMonth = newMonth;
-      // ⚠️ Forzamos la muerte del estado anterior para vaciar las gráficas al instante
-      _metrics = null; 
+      _metrics = null;
       _isLoading = true;
       _error = null;
+      // Al cambiar de mes, la predicción de IA anterior ya no es válida
+      // para el periodo que se va a mostrar.
+      _aiPrediction = null;
+      _aiRequested = false;
+      _aiError = null;
     });
 
-    _fetchMonthly(); 
+    _fetchMonthly();
   }
 
- Future<void> _fetchMonthly() async {
-    if (!mounted) return;
+  /// Único punto de verdad para decidir si el backend realmente
+  /// trajo datos para el periodo solicitado. Usa las MISMAS claves
+  /// (snake_case) que consume _MonthlyMetrics.fromJson, para que el
+  /// gate y el parser nunca queden desincronizados.
+ bool _huboDatosReales(Map<String, dynamic> dataRoot) {
+    final chartData = dataRoot['chartData'] as List? ?? [];
+    final logs = dataRoot['logs'] as List? ?? [];
+    final totalConsumption = (dataRoot['totalConsumption'] as num?)?.toDouble() ?? 0;
     
+    return chartData.isNotEmpty || logs.isNotEmpty || totalConsumption != 0;
+  }
+
+  Future<void> _fetchMonthly() async {
+    if (!mounted) return;
+
     if (!_isLoading) {
-      setState(() { _isLoading = true; _error = null; });
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
     }
 
     try {
       final token = await SessionService.getToken();
-      final url   = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/monthly');
+      final url = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/monthly');
 
       final body = jsonEncode({
         'meterId': _hardwareId,
-        'month':   _selectedMonth,
-        'year':    _selectedYear,
+        'month': _selectedMonth,
+        'year': _selectedYear,
       });
 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-        body: body,
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
-      // 🚨 CORRECCIÓN: NestJS puede responder tanto con 200 como con 201 en un método POST exitoso
+      // NestJS puede responder 200 o 201 en un POST exitoso.
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        
-        // Revisamos la estructura del JSON que envía tu backend ('data' o directo)
-        final dataRoot = decoded.containsKey('data') ? decoded['data'] : decoded;
-        final rawLogs = dataRoot['logs'] as List? ?? [];
+        final dataRoot = decoded.containsKey('data')
+            ? decoded['data'] as Map<String, dynamic>
+            : decoded;
 
-        if (rawLogs.isEmpty && (dataRoot['totalConsumption'] ?? 0) == 0) {
-          _limpiarDatosPorCompleto();
+        if (!_huboDatosReales(dataRoot)) {
+          _limpiarDatosPorCompleto(mensaje: decoded['message']?.toString());
         } else {
           setState(() {
             _metrics = _MonthlyMetrics.fromJson(dataRoot);
@@ -297,85 +287,64 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     }
   }
 
-  // Nuevo método para vaciar la interfaz de forma real
-  void _limpiarDatosPorCompleto() {
+  void _limpiarDatosPorCompleto({String? mensaje}) {
+    if (!mounted) return;
     setState(() {
-      _error   = null;
+      _error = null;
       _isLoading = false;
       _metrics = _MonthlyMetrics(
-        month:             _selectedMonth,
-        year:              _selectedYear,
-        totalConsumption:  0.0,
+        month: _selectedMonth,
+        year: _selectedYear,
+        totalConsumption: 0.0,
         averagePercentage: 0.0,
         standardDeviation: 0.0,
-        lowerBound:        0.0,
-        upperBound:        0.0,
-        activeDays:        0,
-        logs:              [], // Al irse vacío, se activa el contenedor "_emptyChart"
-        chartData:         [],
-        outliers:          [],
-        message: 'Sin registros para este mes',
-      );
-    });
-  }
-
-  void _cargarDatosProvisionales() {
-    setState(() {
-      _error   = null;
-      _isLoading = false;
-      _metrics = _MonthlyMetrics(
-        month:             _selectedMonth,
-        year:              _selectedYear,
-        totalConsumption:  65.0,
-        averagePercentage: 42.0,
-        standardDeviation: 4.5,
-        lowerBound:        10.0,
-        upperBound:        95.0,
-        activeDays:        4,
-        logs: [
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 5),  percentage: 85.0),
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 12), percentage: 60.0),
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 18), percentage: 20.0),
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 25), percentage: 95.0),
-        ],
-        chartData: [
-          const _ChartPoint(day: 5,  value: 85.0),
-          const _ChartPoint(day: 12, value: 60.0),
-          const _ChartPoint(day: 18, value: 20.0),
-          const _ChartPoint(day: 25, value: 95.0),
-        ],
-        outliers: [
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 18), percentage: 20.0),
-        ],
-        message: 'Datos provisionales de desarrollo',
+        lowerBound: 0.0,
+        upperBound: 0.0,
+        activeDays: 0,
+        logs: [],
+        chartData: [],
+        outliers: [],
+        message: mensaje ?? 'Sin registros para este mes',
       );
     });
   }
 
   Future<void> _fetchAIPrediction() async {
     if (!mounted) return;
-    setState(() { _aiLoading = true; _aiError = null; _aiRequested = true; });
+    setState(() {
+      _aiLoading = true;
+      _aiError = null;
+      _aiRequested = true;
+    });
 
     try {
       final token = await SessionService.getToken();
-      final url   = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/ai');
-      final body  = jsonEncode({'meterId': _hardwareId});
+      final url = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/ai');
 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-        body: body,
-      ).timeout(const Duration(seconds: 15));
+      // Se manda el mismo periodo (mes/año) que se está mostrando en
+      // pantalla, para que la predicción esté ligada a esos datos y no
+      // sea una llamada desconectada del contexto visible.
+      final body = jsonEncode({
+        'meterId': _hardwareId,
+        'month': _selectedMonth,
+        'year': _selectedYear,
+      });
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        
-        // Extraemos los datos reales calculados por Gemini en tu NestJS
         setState(() {
           _aiPrediction = _AIPrediction.fromJson(decoded);
           _aiLoading = false;
@@ -394,23 +363,10 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     }
   }
 
-  void _cargarAIProvisional() {
-    setState(() {
-      _aiError      = null;
-      _aiPrediction = _AIPrediction(
-        meterId:                  _hardwareId,
-        estimatedRechargeDate:    '2026-07-18T12:00:00Z',
-        daysRemaining:            19,
-        estimatedConsumptionRate: '1.25 lt/día',
-        confidenceScore:          0.92,
-        message:                  null,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final shortId = _hardwareId.length > 8 ? _hardwareId.substring(0, 8).toUpperCase() : _hardwareId.toUpperCase();
+    final shortId =
+        _hardwareId.length > 8 ? _hardwareId.substring(0, 8).toUpperCase() : _hardwareId.toUpperCase();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -463,7 +419,11 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
             ),
             IconButton(
               icon: _isLoading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
                   : const Icon(Icons.refresh, color: Colors.white),
               onPressed: _isLoading ? null : _fetchMonthly,
             ),
@@ -481,24 +441,21 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
         children: [
           _buildMonthSelector(),
           const SizedBox(height: 20),
-
-          // ── 1. HISTORIAL DE DISPERSIÓN MENSUAL (La Gráfica de Barras) ──
-          const Text('HISTORIAL DE DISPERSIÓN MENSUAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+          const Text('HISTORIAL DE DISPERSIÓN MENSUAL',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
           const SizedBox(height: 12),
           _buildBarChart(),
           const SizedBox(height: 20),
           _buildLiterCards(),
           const SizedBox(height: 28),
-
-          // ── 2. LOGS DEL MES (Gráfico de Dispersión Nativo) ──
-          const Text('LOGS DEL MES (DISPERSIÓN DE LECTURAS)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+          const Text('LOGS DEL MES (DISPERSIÓN DE LECTURAS)',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
           const SizedBox(height: 4),
-          const Text('Variaciones puntuales registradas directamente por el sensor.', style: TextStyle(fontSize: 11, color: Colors.black45)),
+          const Text('Variaciones puntuales registradas directamente por el sensor.',
+              style: TextStyle(fontSize: 11, color: Colors.black45)),
           const SizedBox(height: 12),
           _buildScatterChart(),
           const SizedBox(height: 28),
-
-          // ── 3. PREDICCIÓN INTELIGENTE GEMINI AI ──
           _buildAIPredictionSection(),
           const SizedBox(height: 32),
         ],
@@ -518,14 +475,16 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(6)),
+          decoration:
+              BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(6)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               value: _selectedMonth,
               isDense: true,
-              items: opciones.map((m) => DropdownMenuItem(value: m, child: Text(_mesesNombres[m], style: const TextStyle(fontSize: 14)))).toList(),
-              // Redirigido a la nueva función de control estricto de limpieza
-              onChanged: _onMonthChanged, 
+              items: opciones
+                  .map((m) => DropdownMenuItem(value: m, child: Text(_mesesNombres[m], style: const TextStyle(fontSize: 14))))
+                  .toList(),
+              onChanged: _onMonthChanged,
             ),
           ),
         ),
@@ -535,8 +494,7 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
 
   Widget _buildBarChart() {
     final m = _metrics;
-    // CORRECCIÓN REACTIVA: Si m es nulo o viene sin registros reales, limpia el UI de inmediato
-    if (m == null || m.logs.isEmpty || m.totalConsumption == 0) {
+    if (m == null || m.chartData.isEmpty) {
       return _emptyChart(m?.message ?? 'Sin registros de consumo en este periodo.');
     }
 
@@ -544,14 +502,14 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
 
     for (final log in m.logs) {
       final dia = log.date.day;
-      if (dia >= 1 && dia <= 7)   semanasValores[0].add(log.percentage);
-      if (dia >= 8 && dia <= 14)  semanasValores[1].add(log.percentage);
+      if (dia >= 1 && dia <= 7) semanasValores[0].add(log.percentage);
+      if (dia >= 8 && dia <= 14) semanasValores[1].add(log.percentage);
       if (dia >= 15 && dia <= 21) semanasValores[2].add(log.percentage);
       if (dia >= 22 && dia <= 31) semanasValores[3].add(log.percentage);
     }
 
     List<double> semanasPromedios = [0.0, 0.0, 0.0, 0.0];
-    double ultimoValorValido = 100.0;
+    double ultimoValorValido = m.averagePercentage > 0 ? m.averagePercentage : 100.0;
 
     for (int i = 0; i < 4; i++) {
       if (semanasValores[i].isNotEmpty) {
@@ -588,7 +546,7 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
                 bool hayDecremento = index > 0 && semanasPromedios[index] < semanasPromedios[index - 1];
 
                 final Color barColor = (hayDecremento || porcentajeSemana < 25)
-                    ? const Color(0xFFEF4444) 
+                    ? const Color(0xFFEF4444)
                     : porcentajeSemana >= 50
                         ? MeterHistoryScreen.availableGreen
                         : Colors.amber[600]!;
@@ -639,8 +597,8 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
         width: double.infinity,
         height: 110,
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F5F5), 
-          borderRadius: BorderRadius.circular(10), 
+          color: const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: const Color(0xFFE0E0E0)),
         ),
         child: Column(
@@ -656,7 +614,7 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
   Widget _buildLiterCards() {
     final m = _metrics;
     final double consumidoLt = m == null ? 0 : _capacityLiters * (m.totalConsumption / 100.0);
-    final double restanteLt  = m == null ? 0 : _capacityLiters * (m.averagePercentage / 100.0);
+    final double restanteLt = m == null ? 0 : _capacityLiters * (m.averagePercentage / 100.0);
 
     return Row(
       children: [
@@ -681,8 +639,7 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
 
   Widget _buildScatterChart() {
     final m = _metrics;
-    // CORRECCIÓN REACTIVA: Si m viene vacío, limpia instantáneamente el gráfico de dispersión
-    if (m == null || m.logs.isEmpty || m.totalConsumption == 0) {
+    if (m == null || m.logs.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
@@ -713,6 +670,22 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
   }
 
   Widget _buildAIPredictionSection() {
+    // Si todavía no hay métricas reales del mes, no tiene sentido
+    // ofrecer "calcular predicción": no habría datos sobre los cuales
+    // basarla. Esto deja explícito el vínculo entre lo que se ve en
+    // pantalla y la disponibilidad de la IA.
+    final hayDatosDelMes = _metrics != null && _metrics!.chartData.isNotEmpty;
+
+    if (!hayDatosDelMes) {
+      return Center(
+        child: Text(
+          'No hay datos suficientes en este mes para calcular una predicción.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.black45, fontSize: 12),
+        ),
+      );
+    }
+
     if (!_aiRequested) {
       return Center(
         child: ElevatedButton.icon(
@@ -771,7 +744,7 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
           Text('PRÓXIMA RECARGA ESTIMADA: En ${pred.daysRemaining} días', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text('CONSUMO CALCULADO: ${pred.estimatedConsumptionRate ?? "—"}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          Text('NIVEL DE CONFIANZA: ${( (pred.confidenceScore ?? 0) * 100 ).toStringAsFixed(0)}%', style: TextStyle(color: Colors.blue[300], fontSize: 12, fontWeight: FontWeight.w500)),
+          Text('NIVEL DE CONFIANZA: ${((pred.confidenceScore ?? 0) * 100).toStringAsFixed(0)}%', style: TextStyle(color: Colors.blue[300], fontSize: 12, fontWeight: FontWeight.w500)),
           const SizedBox(height: 10),
           Text(pred.message ?? 'Análisis predictivo completado con éxito basado en tus flujos de dispersión.', style: TextStyle(color: Colors.blue[100], fontSize: 11, height: 1.3)),
         ],
@@ -803,7 +776,7 @@ class _ScatterPainter extends CustomPainter {
     for (int i = 0; i <= 4; i++) {
       double y = size.height * (i / 4);
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-      
+
       final textPainter = TextPainter(
         text: TextSpan(
           text: '${(100 - (i * 25))}%',
@@ -820,14 +793,14 @@ class _ScatterPainter extends CustomPainter {
       final int day = log.date.day;
       if (day < 1 || day > 31) continue;
 
-      double xFraction = (day - 1) / 30; 
+      double xFraction = (day - 1) / 30;
       double yFraction = 1 - (log.percentage / 100);
 
       double posX = xFraction * size.width;
       double posY = yFraction * size.height;
 
       final isOutlier = outlierDays.contains(day);
-      
+
       final dotPaint = Paint()
         ..color = isOutlier ? Colors.red : (log.percentage < 25 ? Colors.amber[700]! : lightBlue)
         ..style = PaintingStyle.fill;
