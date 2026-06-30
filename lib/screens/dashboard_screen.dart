@@ -204,8 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          const Center(child: CircularProgressIndicator()),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
@@ -257,16 +256,13 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  void _manejarAccionNuevoMedidor(
-      UserState estadoActual, String? userEmail) {
-    Navigator.pushNamed(context, '/add-meter', arguments: userEmail)
-        .then((_) {
+  void _manejarAccionNuevoMedidor(UserState estadoActual, String? userEmail) {
+    Navigator.pushNamed(context, '/add-meter', arguments: userEmail).then((_) {
       _cargarListadoMedidores();
     });
   }
 
-  void _abrirMeterDashboard(
-      Map<String, dynamic> meter, bool isPremiumActive) {
+  void _abrirMeterDashboard(Map<String, dynamic> meter, bool isPremiumActive) {
     final String hardwareId = meter['id']?.toString() ?? '';
     final String alias = meter['metername']?.toString() ?? 'Medidor';
     final double capacityLiters =
@@ -280,6 +276,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         'alias': alias,
         'capacityLiters': capacityLiters,
         'isPremiumActive': isPremiumActive,
+        '_token': SessionService.getToken()
       },
     );
   }
@@ -295,8 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text('Metri GAS',
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -312,8 +308,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         valueListenable: StorageService.userStateNotifier,
         builder: (context, userState, child) {
           final String? userName = StorageService.userName;
-          final bool isPremiumActive =
-              userState == UserState.premiumActive;
+          final bool isPremiumActive = userState == UserState.premiumActive;
 
           return Column(
             children: [
@@ -327,23 +322,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                           context, userState, userName, userEmail),
                       const SizedBox(height: 24),
                       Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('MIS MEDIDORES',
                               style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16)),
+                                  fontWeight: FontWeight.bold, fontSize: 16)),
                           if (userState == UserState.guest)
                             TextButton.icon(
                               onPressed: _inyectarMedidoresModoDev,
                               icon: const Icon(Icons.developer_mode,
                                   size: 16, color: Colors.orange),
-                              label: const Text(
-                                  'Inyectar Medidores (Dev)',
+                              label: const Text('Inyectar Medidores (Dev)',
                                   style: TextStyle(
-                                      color: Colors.orange,
-                                      fontSize: 12)),
+                                      color: Colors.orange, fontSize: 12)),
                             ),
                         ],
                       ),
@@ -375,8 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       return Card(
         color: Colors.white,
         elevation: 1,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: const Padding(
           padding: EdgeInsets.all(24.0),
           child: SizedBox(
@@ -384,8 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             child: Text(
               'Aún no tienes medidores enlazados.\nVincule un nuevo medidor a su cuenta para poder acceder a su monitoreo en tiempo real.',
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(color: Colors.grey, height: 1.4, fontSize: 13),
+              style: TextStyle(color: Colors.grey, height: 1.4, fontSize: 13),
             ),
           ),
         ),
@@ -401,8 +390,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         final String idHardware = meter['id']?.toString() ?? 'ID-UNK';
         final String aliasHardware =
             meter['metername']?.toString() ?? 'Medidor';
-        final String capacidad =
-            meter['capacity']?.toString() ?? '20';
+        final String capacidad = meter['capacity']?.toString() ?? '20';
 
         return Card(
           color: Colors.white,
@@ -412,8 +400,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () =>
-                _abrirMeterDashboard(meter, isPremiumActive),
+            onTap: () => _abrirMeterDashboard(meter, isPremiumActive),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
@@ -467,22 +454,22 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF0052CC),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             elevation: 2,
           ),
           onPressed: () => _manejarAccionNuevoMedidor(estado, email),
           icon: const Icon(Icons.add, color: Colors.white),
           label: const Text('Enlazar nuevo medidor',
-              style: TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       ),
     );
   }
 
-  Widget _buildPerfilSeccionCondicional(BuildContext context,
-      UserState state, String? userName, String? userEmail) {
+  Widget _buildPerfilSeccionCondicional(BuildContext context, UserState state,
+      String? userName, String? userEmail) {
     switch (state) {
       case UserState.guest:
         return _buildCardInvitado(context);
@@ -499,8 +486,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Card(
       color: Colors.white,
       elevation: 2,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -508,8 +494,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             const Text(
               'Vuelvete premium y accede a las funciones completas',
               textAlign: TextAlign.center,
-              style:
-                  TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 12),
             const Column(
@@ -536,8 +521,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 onPressed: () => Navigator.pushNamed(context, '/login'),
                 child: const Text('Volverme Premium',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold)),
+                        color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             )
           ],
@@ -553,8 +537,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Card(
       color: Colors.white,
       elevation: 2,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -564,8 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 const CircleAvatar(
                   radius: 26,
                   backgroundColor: Color(0xFF4285F4),
-                  child:
-                      Icon(Icons.person, size: 32, color: Colors.white),
+                  child: Icon(Icons.person, size: 32, color: Colors.white),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -573,8 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('Nombre de usuario:',
-                          style: TextStyle(
-                              color: Colors.grey, fontSize: 11)),
+                          style: TextStyle(color: Colors.grey, fontSize: 11)),
                       Text(userName ?? 'Usuario Premium',
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 14)),
@@ -585,15 +566,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Text('Subscripcion:',
-                        style: TextStyle(
-                            color: Colors.grey, fontSize: 11)),
+                        style: TextStyle(color: Colors.grey, fontSize: 11)),
                     Text(
                       esActivo ? 'ACTIVA' : 'INACTIVA',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: esActivo
-                              ? const Color(0xFF4285F4)
-                              : Colors.red,
+                          color:
+                              esActivo ? const Color(0xFF4285F4) : Colors.red,
                           fontSize: 14),
                     ),
                   ],
@@ -632,24 +611,21 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     onPressed: () => _cerrarSesion(context),
                     icon: const Icon(Icons.logout, size: 16),
-                    label: const Text('Salir',
-                        style: TextStyle(fontSize: 12)),
+                    label: const Text('Salir', style: TextStyle(fontSize: 12)),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: esActivo
-                          ? Colors.red[700]
-                          : const Color(0xFF0052CC),
+                      backgroundColor:
+                          esActivo ? Colors.red[700] : const Color(0xFF0052CC),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6)),
                     ),
                     onPressed: () {
                       if (esActivo) {
-                        _mostrarDialogoCancelar(
-                            context, userName, userEmail);
+                        _mostrarDialogoCancelar(context, userName, userEmail);
                       } else {
                         Navigator.pushNamed(context, '/subscription',
                                 arguments: userEmail)
@@ -714,7 +690,7 @@ class _AnimatedMeterIconState extends State<_AnimatedMeterIcon>
       builder: (context, child) {
         // Hace rotar levemente el widget de izquierda a derecha de forma suave
         return Transform.rotate(
-          angle: _controller.value * 0.16 - 0.08, 
+          angle: _controller.value * 0.16 - 0.08,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(

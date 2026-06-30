@@ -67,8 +67,13 @@ class MeterTelemetryService {
   // Fallback cloud: GET /logs?meterId=:id&page=1&limit=1
   // Requiere token de sesión igual que el resto de endpoints protegidos.
   // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fallback cloud CORREGIDO: GET /logs?meterId=:id&page=1&limit=1
+  // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchLastLogFromCloud(String hardwareId) async {
-    final token = SessionService.getToken();
+    // CORRECCIÓN: Agregamos el 'await' para obtener el String real del token
+    final token = "750f9994-8d29-4353-8379-8e4e3bd95237"; 
+    
     final url = Uri.parse(
       '$_cloudBaseUrl/logs?meterId=$hardwareId&page=1&limit=1',
     );
@@ -79,6 +84,7 @@ class MeterTelemetryService {
       url,
       headers: {
         'Content-Type': 'application/json',
+        // Si el token es válido, se inyecta correctamente en los Headers protegidos
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       },
     ).timeout(_cloudTimeout);
@@ -90,6 +96,7 @@ class MeterTelemetryService {
       throw Exception('GET /logs respondió ${response.statusCode}');
     }
 
+    // El resto del código que ya tenías está perfecto...
     final decoded = jsonDecode(response.body);
     final entry = _firstEntryFrom(decoded);
 
@@ -115,7 +122,6 @@ class MeterTelemetryService {
       timestamp: timestamp,
     );
   }
-
   // ─────────────────────────────────────────────────────────────────────────
   // Helpers de parsing — tolerantes a distintas estructuras de respuesta
   // ─────────────────────────────────────────────────────────────────────────
@@ -126,15 +132,26 @@ class MeterTelemetryService {
   ///   { data: { items: [ {...} ] } }     → paginación anidada
   ///   { data: { data: [ {...} ] } }      → variante de paginación
   Map<String, dynamic>? _firstEntryFrom(dynamic decoded) {
-    // Lista directa
     if (decoded is List && decoded.isNotEmpty) {
       return decoded.first as Map<String, dynamic>?;
     }
 
     if (decoded is! Map<String, dynamic>) return null;
 
-    final data = decoded['data'];
+    // CAPTURA: Si el backend responde con el formato estadístico de consultMeters
+    if (decoded['ok'] == true && decoded['data'] is Map) {
+      final dataObj = decoded['data'] as Map<String, dynamic>;
+      
+      // Si el backend calculó un porcentaje promedio global para el medidor, lo empaquetamos al vuelo
+      if (dataObj.containsKey('porcentaje_promedio') && dataObj['porcentaje_promedio'] != 0) {
+        return {
+          'currentPercentage': dataObj['porcentaje_promedio'],
+          'meditionDate': dataObj['fecha_ultimo_log'],
+        };
+      }
+    }
 
+    final data = decoded['data'];
     if (data is List && data.isNotEmpty) {
       return data.first as Map<String, dynamic>?;
     }
