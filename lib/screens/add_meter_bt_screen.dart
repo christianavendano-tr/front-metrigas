@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/meter_manager.dart'; // Sincronizado con tu manejador real
+import 'package:permission_handler/permission_handler.dart';
 
 class AddMeterBtScreen extends StatefulWidget {
   const AddMeterBtScreen({super.key});
@@ -80,9 +81,24 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
   }
 
   // ===========================================================================
-  // MOTOR BLUETOOTH (FASES 1 Y 2)
+  // MOTOR BLUETOOTH (REFINADO CON VERIFICACIÓN DE PERMISOS DE ANDROID)
   // ===========================================================================
   Future<void> _startBleScan() async {
+    // Verificación y solicitud nativa de permisos en tiempo de ejecución
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location, // Requerido para retrocompatibilidad con Android < 12
+    ].request();
+
+    // Comprobamos si el usuario denegó alguno de los accesos críticos
+    if (statuses[Permission.bluetoothScan]?.isDenied == true ||
+        statuses[Permission.bluetoothConnect]?.isDenied == true) {
+      _showSnackBar("Se requieren permisos de Bluetooth para buscar el medidor.", Colors.red);
+      return;
+    }
+
+    // Una vez otorgados los permisos por el sistema operativo, validamos el estado de las antenas
     if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
       _showSnackBar("Por favor, enciende el Bluetooth de tu dispositivo", Colors.orange);
       return;
@@ -101,13 +117,12 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
       _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         if (!mounted) return;
         setState(() {
-          // Filtramos dispositivos cuyo nombre sea Metrigas (o similar)
           _scanResults = results.where((r) {
             final name = r.device.advName.trim();
             final platformName = r.device.platformName.trim();
             return name.toLowerCase().contains('metrigas') || 
                    platformName.toLowerCase().contains('metrigas') ||
-                   name.isNotEmpty; // Deja pasar nombres válidos si estás en pruebas custom
+                   name.isNotEmpty;
           }).toList();
         });
       });
