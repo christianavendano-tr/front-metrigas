@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 import '../services/registration_service.dart';
-import '../services/storage_service.dart'; // IMPORTANTE: Importamos para verificar el estado de la sesión
+import '../services/storage_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -18,14 +18,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      // 1. Intentamos recuperar el email desde los argumentos de la ruta primero (por si se pasa explícitamente)
+      // 1. Try to get email from arguments
       final args = ModalRoute.of(context)?.settings.arguments;
       String? userEmail;
       if (args is String) {
         userEmail = args;
       }
 
-      // 2. Si no viene en argumentos, cae en el flujo transicional del registro/login anterior
+      // 2. If email not found shows error
       userEmail ??= RegistrationService.temporaryEmail;
 
       if (userEmail == null) {
@@ -79,11 +79,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: col));
   }
 
-  /// Método centralizado para controlar la acción de ir hacia atrás
   void _handleBackNavigation() {
-    // Verificamos si el usuario actual NO es un invitado (es decir, ya está logeado en el Dashboard)
+    // Verify if user is already logged
     if (StorageService.userStateNotifier.value != UserState.guest) {
-      // Si hay pantallas previas en el stack, hacemos un pop simple para preservar el estado del Dashboard
+      // If there were previous screens, we POP to preserve dashboard
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       } else {
@@ -98,10 +97,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // Deshabilitamos el comportamiento por defecto del botón físico de Android
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        _handleBackNavigation(); // Ejecuta nuestra lógica adaptativa
+        _handleBackNavigation();
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0052CC),

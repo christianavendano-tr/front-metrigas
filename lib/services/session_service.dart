@@ -6,13 +6,13 @@ class SessionService {
   static const String _tokenKey = 'jwt_access_token';
   static String? _accessToken;
 
-  /// Carga el token guardado del disco a la memoria RAM al arrancar la app
+  /// Gets token from memory when starting app
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _accessToken = prefs.getString(_tokenKey);
   }
 
-  /// Guarda el token de forma persistente
+  /// Saves the token
   static Future<void> saveToken(String token) async {
     _accessToken = token;
     final prefs = await SharedPreferences.getInstance();
@@ -23,20 +23,20 @@ class SessionService {
     return _accessToken;
   }
 
-  /// Verifica de forma segura si el token actual sigue vigente
+  /// Verifies if current token is active
   static bool hasSession() {
     if (_accessToken == null || _accessToken!.isEmpty) return false;
 
     try {
-      // Si JwtDecoder dice que está expirado, retorna false
+      // If JwtDecoder says token is expired, returns false
       return !JwtDecoder.isExpired(_accessToken!);
     } catch (e) {
-      // Si el token está corrupto o mal formado, lo toma como sesión no válida
+      // If token is corrupt also returns false
       return false;
     }
   }
 
-  /// Borra el token por completo del teléfono
+  /// Deletes token from device
   static Future<void> clearSession() async {
     _accessToken = null;
     final prefs = await SharedPreferences.getInstance();

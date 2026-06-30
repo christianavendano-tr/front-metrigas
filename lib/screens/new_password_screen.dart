@@ -16,11 +16,6 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _repeatPasswordController = TextEditingController();
   bool _isLoading = false;
-
-  // Variables de estado explícitas en vez de getters.
-  // Esto garantiza que se actualicen exactamente cuando llamamos
-  // a _validatePassword() y evita cualquier ambigüedad sobre cuándo
-  // Flutter reconstruye el widget.
   bool _hasMinLength = false;
   bool _hasUppercase = false;
   bool _hasNumber = false;
@@ -31,8 +26,6 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   @override
   void initState() {
     super.initState();
-    // Escucha cambios en el controller directamente, en vez de depender
-    // solo del onChanged del TextField (más robusto ante autofill, paste, etc.)
     _newPasswordController.addListener(_validatePassword);
   }
 
@@ -42,8 +35,6 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
     final newHasUppercase = _uppercaseRegExp.hasMatch(text);
     final newHasNumber = _numberRegExp.hasMatch(text);
 
-    // Solo llamamos setState si algo realmente cambió, para evitar
-    // rebuilds innecesarios en cada tecla presionada.
     if (newHasMinLength != _hasMinLength ||
         newHasUppercase != _hasUppercase ||
         newHasNumber != _hasNumber) {
@@ -83,8 +74,6 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
       if (!mounted) return;
 
-      // El backend puede responder 200 o 201 según la implementación;
-      // ambos indican que la contraseña se actualizó correctamente.
       if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contraseña actualizada con éxito')),

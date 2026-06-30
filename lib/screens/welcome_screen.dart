@@ -15,7 +15,7 @@ class WelcomeScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: SafeArea(
-        // LayoutBuilder + SingleChildScrollView evita cualquier overflow futuro en pantallas chicas
+        // LayoutBuilder + SingleChildScrollView avoids overflows
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -33,7 +33,6 @@ class WelcomeScreen extends StatelessWidget {
                           return Transform.scale(
                             scale: value,
                             child: Opacity(
-                              // SOLUCIÓN: Forzamos a que el valor de opacidad jamás supere 1.0 ni baje de 0.0
                               opacity: value.clamp(0.0, 1.0), 
                               child: child,
                             ),
