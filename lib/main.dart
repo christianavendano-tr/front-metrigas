@@ -9,18 +9,16 @@ import 'screens/verification_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/meter_dashboard_screen.dart';
+import 'screens/add_meter_bt_screen.dart';
 import 'screens/meter_history_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SessionService.init();
   await StorageService.init();
   
-  // === CONFIGURACIÓN DE PRUEBA (MOCK) ===
-  // Descomenta la línea que quieras probar para ver cómo muta el Dashboard automáticamente:
-  StorageService.setMockState(UserState.guest);
-  // StorageService.setMockState(UserState.premiumActive, name: "Carlita Wishes");
-  // StorageService.setMockState(UserState.premiumInactive, name: "Carlita Wishes");
   // ======================================
+
 
   runApp(const MetriGasApp());
 }
@@ -48,6 +46,7 @@ class MetriGasApp extends StatelessWidget {
         '/subscription':    (context) => const SubscriptionScreen(),
         '/forgot':          (context) => const ForgotPasswordScreen(),
         '/meter-dashboard': (context) => const MeterDashboardScreen(),
+        '/add-meter': (context) => const AddMeterBtScreen(),
         '/meter-history':   (context) => const MeterHistoryScreen(),
       },
     );
