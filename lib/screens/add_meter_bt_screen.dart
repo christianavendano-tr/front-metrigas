@@ -143,7 +143,10 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
       await FlutterBluePlus.stopScan();
       
       // 1. Nos conectamos al dispositivo periférico
-      await device.connect(timeout: const Duration(seconds: 5));
+await device.connect(
+  timeout: const Duration(seconds: 5),
+  license: (License as dynamic).none ?? (License as dynamic).values.first,
+);
       _targetDevice = device;
 
       // 2. SOLUCIÓN IMPLEMENTADA: Forzamos la expansión del MTU a 255 bytes
