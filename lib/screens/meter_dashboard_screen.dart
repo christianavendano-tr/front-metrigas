@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:front_metrigas/services/session_service.dart';
 import 'dart:math' as math;
 import '../services/meter_manager.dart';
 import '../services/storage_service.dart';
 import '../services/meter_telemetry_service.dart';
 // Agregar esta línea (asumiendo que están en la misma carpeta screens):
 import 'meter_history_screen.dart';
+import 'package:http/http.dart' as http;
 
 /// Dashboard individual de un medidor de gas.
 ///
@@ -39,8 +41,8 @@ class MeterDashboardScreen extends StatefulWidget {
     this.telemetryService,
   });
 
-  static const Color primaryBlue   = Color(0xFF0052CC);
-  static const Color lightBlue     = Color(0xFF3B82E0);
+  static const Color primaryBlue = Color(0xFF0052CC);
+  static const Color lightBlue = Color(0xFF3B82E0);
   static const Color availableGreen = Color(0xFF7CB342);
 
   @override
@@ -51,15 +53,15 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   late final MeterTelemetryService _telemetryService;
 
   // ── estado de telemetría ──────────────────────────────────────────────────
-  bool    _isLoading       = true;
-  bool    _isDeleting      = false;
-  double? _percentAvailable;         // null = sin lectura todavía
+  bool _isLoading = true;
+  bool _isDeleting = false;
+  double? _percentAvailable; // null = sin lectura todavía
 
   // ── parámetros resueltos desde la ruta ───────────────────────────────────
   late String _hardwareId;
   late String _alias;
   late double _capacityLiters;
-  late bool   _isPremiumActive;
+  late bool _isPremiumActive;
   bool _paramsResolved = false;
 
   // ── paywall ───────────────────────────────────────────────────────────────
@@ -95,17 +97,19 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   void _resolveRouteParams() {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
-      _hardwareId     = args['hardwareId']?.toString()   ?? widget.hardwareId;
-      _alias          = args['alias']?.toString()        ?? widget.alias;
-      _isPremiumActive = args['isPremiumActive'] as bool? ?? widget.isPremiumActive;
+      _hardwareId = args['hardwareId']?.toString() ?? widget.hardwareId;
+      _alias = args['alias']?.toString() ?? widget.alias;
+      _isPremiumActive =
+          args['isPremiumActive'] as bool? ?? widget.isPremiumActive;
       _capacityLiters = switch (args['capacityLiters']) {
-        final num n  => n.toDouble(),
-        final Object o => double.tryParse(o.toString()) ?? widget.capacityLiters,
-        _              => widget.capacityLiters,
+        final num n => n.toDouble(),
+        final Object o =>
+          double.tryParse(o.toString()) ?? widget.capacityLiters,
+        _ => widget.capacityLiters,
       };
     } else {
-      _hardwareId     = widget.hardwareId;
-      _alias          = widget.alias;
+      _hardwareId = widget.hardwareId;
+      _alias = widget.alias;
       _capacityLiters = widget.capacityLiters;
       _isPremiumActive = widget.isPremiumActive;
     }
@@ -157,14 +161,17 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
         ),
         content: RichText(
           text: TextSpan(
-            style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
+            style: const TextStyle(
+                fontSize: 14, color: Colors.black87, height: 1.4),
             children: [
               const TextSpan(text: '¿Deseas eliminar '),
               TextSpan(
                 text: '"$_alias"',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              const TextSpan(text: '?\n\nEsta acción no se puede deshacer y eliminará todos los datos asociados.'),
+              const TextSpan(
+                  text:
+                      '?\n\nEsta acción no se puede deshacer y eliminará todos los datos asociados.'),
             ],
           ),
         ),
@@ -176,10 +183,12 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red[700],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sí, eliminar', style: TextStyle(color: Colors.white)),
+            child: const Text('Sí, eliminar',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -190,14 +199,24 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
     // 2. Spinner de eliminación
     setState(() => _isDeleting = true);
 
-    final ok = await MeterManager.eliminarMedidor(_hardwareId);
+    bool ok = true;
+    final token = SessionService.getToken();
+
+    if (token != null && token.isNotEmpty) {
+      ok = await MeterManager.eliminarMedidorRemoto(_hardwareId);
+    }
+
+    if (ok) {
+      ok = await MeterManager.eliminarMedidorSoloLocal(_hardwareId);
+    }
 
     if (!mounted) return;
     setState(() => _isDeleting = false);
 
     if (ok) {
       // Éxito: regresa al Dashboard y muestra confirmación
-      Navigator.pop(context, true); // true = fue eliminado (DashboardScreen recarga)
+      Navigator.pop(
+          context, true); // true = fue eliminado (DashboardScreen recarga)
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -214,7 +233,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final double percentSensor = _percentAvailable ?? 0;
-    final bool   sinLectura    = _percentAvailable == null;
+    final bool sinLectura = _percentAvailable == null;
 
     final double restantes = _litrosRestantes(_capacityLiters, percentSensor);
     final double consumidos = _litrosConsumidos(_capacityLiters, restantes);
@@ -336,7 +355,9 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
                 Text(
                   _alias,
                   style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -351,8 +372,10 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
             tooltip: 'Actualizar telemetría',
             icon: _isLoading
                 ? const SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.refresh, color: Colors.white),
             onPressed: _isLoading ? null : _loadTelemetry,
@@ -375,13 +398,15 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
             painter: _GaugePainter(
               percentAvailable: percentSensor,
               availableColor: MeterDashboardScreen.availableGreen,
-              consumedColor:  MeterDashboardScreen.lightBlue,
+              consumedColor: MeterDashboardScreen.lightBlue,
             ),
             child: Center(
               child: Container(
-                width: 130, height: 130,
+                width: 130,
+                height: 130,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFF1F1F1), shape: BoxShape.circle,
+                  color: Color(0xFFF1F1F1),
+                  shape: BoxShape.circle,
                 ),
                 child: sinLectura
                     ? const Center(
@@ -397,12 +422,15 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
                           Text(
                             '${percentSensor.round()}%',
                             style: const TextStyle(
-                              fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
                             ),
                           ),
                           const Text(
                             'disponible',
-                            style: TextStyle(fontSize: 13, color: Colors.black54),
+                            style:
+                                TextStyle(fontSize: 13, color: Colors.black54),
                           ),
                         ],
                       ),
@@ -424,21 +452,25 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   }
 
   Widget _legendDot(Color color, String label) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        width: 14, height: 14,
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-      ),
-      const SizedBox(width: 6),
-      Text(label, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-    ],
-  );
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(3)),
+          ),
+          const SizedBox(width: 6),
+          Text(label,
+              style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        ],
+      );
 
   // ─────────────────────────────────────────────────────────────────────────
   // Tarjetas de litros
   // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildLitersSummary(double restantes, double consumidos, bool sinLectura) {
+  Widget _buildLitersSummary(
+      double restantes, double consumidos, bool sinLectura) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -481,10 +513,12 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
         children: [
           Text(
             titulo,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: valueColor),
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: valueColor),
           ),
           const SizedBox(height: 2),
-          Text(subtitulo, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text(subtitulo,
+              style: const TextStyle(fontSize: 12, color: Colors.black54)),
           const SizedBox(height: 6),
           Text(
             formula,
@@ -517,20 +551,30 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
       );
     }
 
-    final bool critico  = percentSensor < 15;
-    final bool bajo     = percentSensor >= 15 && percentSensor < 30;
+    final bool critico = percentSensor < 15;
+    final bool bajo = percentSensor >= 15 && percentSensor < 30;
 
-    final Color bgColor     = critico ? const Color(0xFFFFEBEE)
-                            : bajo    ? const Color(0xFFFFF3E0)
-                                      : const Color(0xFFEFF6FF);
-    final Color borderColor = critico ? const Color(0xFFEF9A9A)
-                            : bajo    ? const Color(0xFFFFB74D)
-                                      : const Color(0xFFBFD9FB);
-    final Color textColor   = critico ? Colors.red[800]!
-                            : bajo    ? Colors.orange[800]!
-                                      : MeterDashboardScreen.primaryBlue;
-    final String icono      = critico ? '🚨' : bajo ? '⚠️' : 'ℹ️';
-    final String mensaje    = critico
+    final Color bgColor = critico
+        ? const Color(0xFFFFEBEE)
+        : bajo
+            ? const Color(0xFFFFF3E0)
+            : const Color(0xFFEFF6FF);
+    final Color borderColor = critico
+        ? const Color(0xFFEF9A9A)
+        : bajo
+            ? const Color(0xFFFFB74D)
+            : const Color(0xFFBFD9FB);
+    final Color textColor = critico
+        ? Colors.red[800]!
+        : bajo
+            ? Colors.orange[800]!
+            : MeterDashboardScreen.primaryBlue;
+    final String icono = critico
+        ? '🚨'
+        : bajo
+            ? '⚠️'
+            : 'ℹ️';
+    final String mensaje = critico
         ? '$icono Nivel crítico en "$_alias": ${percentSensor.round()}%. ¡Recarga inmediatamente!'
         : bajo
             ? '$icono Nivel bajo en "$_alias": ${percentSensor.round()}%. Recarga pronto.'
@@ -672,7 +716,8 @@ class _ActionButton extends StatelessWidget {
                   ),
                   if (isLocked)
                     Container(
-                      width: 18, height: 18,
+                      width: 18,
+                      height: 18,
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -721,21 +766,21 @@ class _GaugePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center      = Offset(size.width / 2, size.height / 2);
-    final radius      = math.min(size.width, size.height) / 2 - 12;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 12;
     const strokeWidth = 16.0;
-    const gapDegrees  = 10.0;
+    const gapDegrees = 10.0;
 
     final availableFraction = (percentAvailable.clamp(0.0, 100.0)) / 100.0;
-    final totalSweep        = 360.0 - gapDegrees * 2;
-    final availableSweep    = totalSweep * availableFraction;
-    final consumedSweep     = totalSweep * (1.0 - availableFraction);
-    final startAngle        = _toRad(-90.0 + gapDegrees / 2);
+    final totalSweep = 360.0 - gapDegrees * 2;
+    final availableSweep = totalSweep * availableFraction;
+    final consumedSweep = totalSweep * (1.0 - availableFraction);
+    final startAngle = _toRad(-90.0 + gapDegrees / 2);
 
     final paint = Paint()
-      ..style      = PaintingStyle.stroke
+      ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
-      ..strokeCap  = StrokeCap.round;
+      ..strokeCap = StrokeCap.round;
 
     paint.color = availableColor;
     canvas.drawArc(
@@ -761,6 +806,6 @@ class _GaugePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _GaugePainter old) =>
       old.percentAvailable != percentAvailable ||
-      old.availableColor   != availableColor   ||
-      old.consumedColor    != consumedColor;
+      old.availableColor != availableColor ||
+      old.consumedColor != consumedColor;
 }
