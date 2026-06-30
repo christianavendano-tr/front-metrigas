@@ -17,7 +17,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
 
   // GET /auth/checkemailpwd/:email
-  // Genera y envía el código de 6 dígitos al correo del usuario.
+  // Generates and sends 6 digit code to user.
   Future<void> _handleSendCode() async {
     if (!_formKey.currentState!.validate()) return;
 
