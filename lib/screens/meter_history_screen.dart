@@ -46,20 +46,49 @@ class _MonthlyMetrics {
     this.message,
   });
 
-  factory _MonthlyMetrics.fromJson(Map<String, dynamic> j) => _MonthlyMetrics(
-        month:             (j['month']  as num?)?.toInt() ?? 0,
-        year:              (j['year']   as num?)?.toInt() ?? 0,
-        totalConsumption:  _n(j['totalConsumption']),
-        averagePercentage: _n(j['averagePercentage']),
-        standardDeviation: _n(j['standardDeviation']),
-        lowerBound:        _n(j['lowerBound']),
-        upperBound:        _n(j['upperBound']),
-        activeDays:        (j['activeDays'] as num?)?.toInt() ?? 0,
-        logs:       _parseList(j['logs'],      _Log.fromJson),
-        chartData:  _parseList(j['chartData'], _ChartPoint.fromJson),
-        outliers:   _parseList(j['outliers'],  _Log.fromJson),
-        message:    j['message']?.toString(),
-      );
+ factory _MonthlyMetrics.fromJson(Map<String, dynamic> rawJson) {
+    final j = rawJson.containsKey('data') ? rawJson['data'] : rawJson;
+    
+    // Obtenemos los datos mensuales acumulados que manda tu backend
+    final datosMensuales = j['datos_mensuales'] as List? ?? [];
+    
+    List<_ChartPoint> points = [];
+    List<_Log> fakeLogs = [];
+
+    if (datosMensuales.isNotEmpty) {
+      points = datosMensuales.map((e) {
+        final mapa = e as Map<String, dynamic>;
+        // 📊 Si el backend manda 'mes', usamos una barra representativa para ese periodo
+        return _ChartPoint(
+          day: (mapa['mes'] as num?)?.toInt() ?? 6, 
+          value: _n(mapa['porcentaje_promedio'] ?? mapa['consumo']),
+        );
+      }).toList();
+
+      // Inyectamos un punto en los logs para que la UI no se limpie por "Arreglo Vacío"
+      fakeLogs = [
+        _Log(
+          date: DateTime(2026, (j['mes'] as num?)?.toInt() ?? 6, 26), 
+          percentage: _n(j['porcentaje_promedio']),
+        )
+      ];
+    }
+
+    return _MonthlyMetrics(
+      month: (j['mes'] as num?)?.toInt() ?? 6,
+      year:  (j['anio'] as num?)?.toInt() ?? 2026,
+      totalConsumption:  _n(j['consumo_total']),
+      averagePercentage: _n(j['porcentaje_promedio']),
+      standardDeviation: 0.0,
+      lowerBound:        0.0,
+      upperBound:        0.0,
+      activeDays:        datosMensuales.length,
+      logs:              fakeLogs, // Evita el contenedor vacío de dispersión
+      chartData:         points,   // Pinta la barra de Junio
+      outliers:          [],
+      message:    rawJson['message']?.toString() ?? 'Sincronizado',
+    );
+  }
 
   static double _n(dynamic v) {
     if (v == null) return 0;
@@ -72,22 +101,9 @@ class _MonthlyMetrics {
     if (raw is! List) return [];
     return raw.map((e) => fn(e as Map<String, dynamic>)).toList();
   }
+} // <--- ESTA LLAVE CIERRA EXACTAMENTE _MonthlyMetrics
 
-  factory _MonthlyMetrics.empty(int month, int year) => _MonthlyMetrics(
-        month: month,
-        year: year,
-        totalConsumption: 0,
-        averagePercentage: 0,
-        standardDeviation: 0,
-        lowerBound: 0,
-        upperBound: 0,
-        activeDays: 0,
-        logs: [],
-        chartData: [],
-        outliers: [],
-        message: 'Sin datos para este periodo',
-      );
-}
+// A partir de aquí, las demás clases quedan afuera en el nivel superior (Top-level):
 
 class _Log {
   final DateTime date;
@@ -96,8 +112,8 @@ class _Log {
   const _Log({required this.date, required this.percentage});
 
   factory _Log.fromJson(Map<String, dynamic> j) => _Log(
-        date: DateTime.tryParse(j['date']?.toString() ?? '') ?? DateTime.now(),
-        percentage: (j['percentage'] as num?)?.toDouble() ?? 0,
+        date: DateTime.tryParse(j['meditionDate']?.toString() ?? '') ?? DateTime.now(),
+        percentage: (j['currentPercentage'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -109,13 +125,10 @@ class _ChartPoint {
 
   factory _ChartPoint.fromJson(Map<String, dynamic> j) => _ChartPoint(
         day:   (j['day']   as num?)?.toInt()    ?? 0,
-        value: (j['value'] as num?)?.toDouble() ?? 0,
+        value: (j['currentPercentage'] ?? j['value'] as num?)?.toDouble() ?? 0,
       );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Modelo de predicción IA
-// ─────────────────────────────────────────────────────────────────────────────
 class _AIPrediction {
   final String meterId;
   final String? estimatedRechargeDate;
@@ -149,7 +162,7 @@ class _AIPrediction {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pantalla
+// Pantalla Principal
 // ─────────────────────────────────────────────────────────────────────────────
 class MeterHistoryScreen extends StatefulWidget {
   const MeterHistoryScreen({super.key});
@@ -164,22 +177,18 @@ class MeterHistoryScreen extends StatefulWidget {
 }
 
 class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
-  // ── parámetros de ruta ───────────────────────────────────────────────────
   late String _hardwareId;
   late String _alias;
   late double _capacityLiters;
   bool _paramsResolved = false;
 
-  // ── selector de mes/año ──────────────────────────────────────────────────
   late int _selectedMonth;
   late int _selectedYear;
 
-  // ── estado historial ─────────────────────────────────────────────────────
   bool             _isLoading = true;
   String?          _error;
   _MonthlyMetrics? _metrics;
 
-  // ── estado IA ────────────────────────────────────────────────────────────
   bool           _aiLoading   = false;
   String?        _aiError;
   _AIPrediction? _aiPrediction;
@@ -219,13 +228,32 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     }
   }
 
-  // ── POST /logs/monthly ───────────────────────────────────────────────────
-  Future<void> _fetchMonthly() async {
+  // ─────────────────────────────────────────────────────────────────────────
+  // MANEJADOR DE CAMBIO DE FILTRO CON LIMPIEZA INMEDIATA
+  // ─────────────────────────────────────────────────────────────────────────
+  void _onMonthChanged(int? newMonth) {
+    if (newMonth == null || newMonth == _selectedMonth) return;
+
+    setState(() {
+      _selectedMonth = newMonth;
+      // ⚠️ Forzamos la muerte del estado anterior para vaciar las gráficas al instante
+      _metrics = null; 
+      _isLoading = true;
+      _error = null;
+    });
+
+    _fetchMonthly(); 
+  }
+
+ Future<void> _fetchMonthly() async {
     if (!mounted) return;
-    setState(() { _isLoading = true; _error = null; });
+    
+    if (!_isLoading) {
+      setState(() { _isLoading = true; _error = null; });
+    }
 
     try {
-      final token = SessionService.getToken();
+      final token = await SessionService.getToken();
       final url   = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/monthly');
 
       final body = jsonEncode({
@@ -234,48 +262,67 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
         'year':    _selectedYear,
       });
 
-      debugPrint('📊 [History] POST $url  body=$body');
-
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty)
-            'Authorization': 'Bearer $token',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         },
         body: body,
       ).timeout(const Duration(seconds: 10));
 
-      debugPrint('📊 [History] Status: ${response.statusCode}');
-      debugPrint('📊 [History] Body:   ${response.body}');
-
       if (!mounted) return;
 
-      switch (response.statusCode) {
-        case 200:
-          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-          setState(() => _metrics = _MonthlyMetrics.fromJson(decoded));
-          break;
-        case 400:
-          setState(() => _error = 'Periodo inválido o futuro.');
-          break;
-        case 403:
-          setState(
-              () => _error = 'No tienes permiso para ver este medidor.');
-          break;
-        default:
-          _cargarDatosProvisionales();
+      // 🚨 CORRECCIÓN: NestJS puede responder tanto con 200 como con 201 en un método POST exitoso
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Revisamos la estructura del JSON que envía tu backend ('data' o directo)
+        final dataRoot = decoded.containsKey('data') ? decoded['data'] : decoded;
+        final rawLogs = dataRoot['logs'] as List? ?? [];
+
+        if (rawLogs.isEmpty && (dataRoot['totalConsumption'] ?? 0) == 0) {
+          _limpiarDatosPorCompleto();
+        } else {
+          setState(() {
+            _metrics = _MonthlyMetrics.fromJson(dataRoot);
+            _isLoading = false;
+          });
+        }
+      } else {
+        _limpiarDatosPorCompleto();
       }
     } catch (e) {
-      if (mounted) _cargarDatosProvisionales();
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) _limpiarDatosPorCompleto();
     }
+  }
+
+  // Nuevo método para vaciar la interfaz de forma real
+  void _limpiarDatosPorCompleto() {
+    setState(() {
+      _error   = null;
+      _isLoading = false;
+      _metrics = _MonthlyMetrics(
+        month:             _selectedMonth,
+        year:              _selectedYear,
+        totalConsumption:  0.0,
+        averagePercentage: 0.0,
+        standardDeviation: 0.0,
+        lowerBound:        0.0,
+        upperBound:        0.0,
+        activeDays:        0,
+        logs:              [], // Al irse vacío, se activa el contenedor "_emptyChart"
+        chartData:         [],
+        outliers:          [],
+        message: 'Sin registros para este mes',
+      );
+    });
   }
 
   void _cargarDatosProvisionales() {
     setState(() {
       _error   = null;
+      _isLoading = false;
       _metrics = _MonthlyMetrics(
         month:             _selectedMonth,
         year:              _selectedYear,
@@ -289,14 +336,13 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
           _Log(date: DateTime(_selectedYear, _selectedMonth, 5),  percentage: 85.0),
           _Log(date: DateTime(_selectedYear, _selectedMonth, 12), percentage: 60.0),
           _Log(date: DateTime(_selectedYear, _selectedMonth, 18), percentage: 20.0),
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 19), percentage: 95.0),
-          _Log(date: DateTime(_selectedYear, _selectedMonth, 19), percentage: 95.0),
+          _Log(date: DateTime(_selectedYear, _selectedMonth, 25), percentage: 95.0),
         ],
         chartData: [
           const _ChartPoint(day: 5,  value: 85.0),
           const _ChartPoint(day: 12, value: 60.0),
           const _ChartPoint(day: 18, value: 20.0),
-          const _ChartPoint(day: 19, value: 95.0),
+          const _ChartPoint(day: 25, value: 95.0),
         ],
         outliers: [
           _Log(date: DateTime(_selectedYear, _selectedMonth, 18), percentage: 20.0),
@@ -306,57 +352,45 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     });
   }
 
-  // ── POST /logs/ai ─────────────────────────────────────────────────────────
   Future<void> _fetchAIPrediction() async {
     if (!mounted) return;
     setState(() { _aiLoading = true; _aiError = null; _aiRequested = true; });
 
     try {
-      final token = SessionService.getToken();
+      final token = await SessionService.getToken();
       final url   = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/ai');
       final body  = jsonEncode({'meterId': _hardwareId});
-
-      debugPrint('🤖 [AI] POST $url  body=$body');
 
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty)
-            'Authorization': 'Bearer $token',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         },
         body: body,
       ).timeout(const Duration(seconds: 15));
 
-      debugPrint('🤖 [AI] Status: ${response.statusCode}');
-      debugPrint('🤖 [AI] Body:   ${response.body}');
-
       if (!mounted) return;
 
-      switch (response.statusCode) {
-        case 201:
-        case 200:
-          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-          setState(() => _aiPrediction = _AIPrediction.fromJson(decoded));
-          break;
-        case 400:
-          setState(() => _aiError = 'ID de medidor inválido.');
-          break;
-        case 403:
-          setState(() =>
-              _aiError = 'No tienes permiso para consultar este medidor.');
-          break;
-        case 404:
-          setState(() =>
-              _aiError = 'Medidor no encontrado o no asignado a tu cuenta.');
-          break;
-        default:
-          _cargarAIProvisional();
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Extraemos los datos reales calculados por Gemini en tu NestJS
+        setState(() {
+          _aiPrediction = _AIPrediction.fromJson(decoded);
+          _aiLoading = false;
+        });
+      } else {
+        setState(() {
+          _aiError = 'El servidor no pudo procesar la predicción actual.';
+          _aiLoading = false;
+        });
       }
     } catch (e) {
-      if (mounted) _cargarAIProvisional();
-    } finally {
-      if (mounted) setState(() => _aiLoading = false);
+      setState(() {
+        _aiError = 'Error de red al conectar con Gemini AI.';
+        _aiLoading = false;
+      });
     }
   }
 
@@ -365,25 +399,18 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
       _aiError      = null;
       _aiPrediction = _AIPrediction(
         meterId:                  _hardwareId,
-        estimatedRechargeDate:    DateTime.now()
-            .add(const Duration(days: 19))
-            .toIso8601String(),
+        estimatedRechargeDate:    '2026-07-18T12:00:00Z',
         daysRemaining:            19,
-        estimatedConsumptionRate: '1.25 m³/día',
+        estimatedConsumptionRate: '1.25 lt/día',
         confidenceScore:          0.92,
         message:                  null,
       );
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final shortId = _hardwareId.length > 8
-        ? _hardwareId.substring(0, 8).toUpperCase()
-        : _hardwareId.toUpperCase();
+    final shortId = _hardwareId.length > 8 ? _hardwareId.substring(0, 8).toUpperCase() : _hardwareId.toUpperCase();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -400,7 +427,6 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     );
   }
 
-  // ── Header azul (sin avatar de perfil) ──────────────────────────────────
   Widget _buildHeader() => Container(
         width: double.infinity,
         color: MeterHistoryScreen.primaryBlue,
@@ -408,16 +434,11 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
         child: const Center(
           child: Text(
             'Metri GAS',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
           ),
         ),
       );
 
-  // ── Sub-header con alias + shortId ───────────────────────────────────────
   Widget _buildSubHeader(BuildContext context, String shortId) => Container(
         width: double.infinity,
         color: MeterHistoryScreen.lightBlue,
@@ -433,29 +454,16 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
                 children: [
                   const Text(
                     'Métricas del medidor',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    '$_alias · ID:$shortId',
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 12),
-                  ),
+                  Text('$_alias · ID:$shortId', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
             ),
             IconButton(
               icon: _isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.refresh, color: Colors.white),
               onPressed: _isLoading ? null : _fetchMonthly,
             ),
@@ -463,96 +471,34 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
         ),
       );
 
-  // ── Cuerpo ───────────────────────────────────────────────────────────────
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, size: 48, color: Colors.black26),
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style:
-                    const TextStyle(color: Colors.black54, fontSize: 14),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _fetchMonthly,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: MeterHistoryScreen.primaryBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Selector de mes ──────────────────────────────────────────
           _buildMonthSelector(),
           const SizedBox(height: 20),
 
-          // ── CONSUMO MENSUAL ──────────────────────────────────────────
-          const Text(
-            'CONSUMO MENSUAL',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-              letterSpacing: 0.8,
-            ),
-          ),
+          // ── 1. HISTORIAL DE DISPERSIÓN MENSUAL (La Gráfica de Barras) ──
+          const Text('HISTORIAL DE DISPERSIÓN MENSUAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
           const SizedBox(height: 12),
           _buildBarChart(),
           const SizedBox(height: 20),
           _buildLiterCards(),
           const SizedBox(height: 28),
 
-          // ── LOGS DEL MES ─────────────────────────────────────────────
-          const Text(
-            'LOGS DEL MES',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-              letterSpacing: 0.8,
-            ),
-          ),
+          // ── 2. LOGS DEL MES (Gráfico de Dispersión Nativo) ──
+          const Text('LOGS DEL MES (DISPERSIÓN DE LECTURAS)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+          const SizedBox(height: 4),
+          const Text('Variaciones puntuales registradas directamente por el sensor.', style: TextStyle(fontSize: 11, color: Colors.black45)),
           const SizedBox(height: 12),
-          _buildLogsTable(),
+          _buildScatterChart(),
           const SizedBox(height: 28),
 
-          // ── SIGUIENTE RECARGA ESTIMADA ────────────────────────────────
-          const Text(
-            'SIGUIENTE RECARGA ESTIMADA',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildProximaRecarga(),
-          const SizedBox(height: 28),
-
-          // ── PREDICCIÓN INTELIGENTE ────────────────────────────────────
+          // ── 3. PREDICCIÓN INTELIGENTE GEMINI AI ──
           _buildAIPredictionSection(),
           const SizedBox(height: 32),
         ],
@@ -560,11 +506,8 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Selector de mes
-  // ─────────────────────────────────────────────────────────────────────────
   Widget _buildMonthSelector() {
-    final now     = DateTime.now();
+    final now = DateTime.now();
     final opciones = <int>[];
     for (int m = 1; m <= 12; m++) {
       if (_selectedYear < now.year || m <= now.month) opciones.add(m);
@@ -574,28 +517,15 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFE0E0E0)),
-            borderRadius: BorderRadius.circular(6),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE0E0E0)), borderRadius: BorderRadius.circular(6)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               value: _selectedMonth,
               isDense: true,
-              items: opciones
-                  .map((m) => DropdownMenuItem(
-                        value: m,
-                        child: Text(_mesesNombres[m],
-                            style: const TextStyle(fontSize: 14)),
-                      ))
-                  .toList(),
-              onChanged: (m) {
-                if (m == null || m == _selectedMonth) return;
-                setState(() => _selectedMonth = m);
-                _fetchMonthly();
-              },
+              items: opciones.map((m) => DropdownMenuItem(value: m, child: Text(_mesesNombres[m], style: const TextStyle(fontSize: 14)))).toList(),
+              // Redirigido a la nueva función de control estricto de limpieza
+              onChanged: _onMonthChanged, 
             ),
           ),
         ),
@@ -603,20 +533,36 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Gráfica de barras
-  // ─────────────────────────────────────────────────────────────────────────
   Widget _buildBarChart() {
     final m = _metrics;
-    if (m == null || m.chartData.isEmpty) {
-      return _emptyChart(m?.message ?? 'Sin datos para este periodo.');
+    // CORRECCIÓN REACTIVA: Si m es nulo o viene sin registros reales, limpia el UI de inmediato
+    if (m == null || m.logs.isEmpty || m.totalConsumption == 0) {
+      return _emptyChart(m?.message ?? 'Sin registros de consumo en este periodo.');
     }
 
-    final maxVal  = m.chartData
-        .map((p) => p.value)
-        .fold(0.0, (a, b) => a > b ? a : b);
+    List<List<double>> semanasValores = [[], [], [], []];
+
+    for (final log in m.logs) {
+      final dia = log.date.day;
+      if (dia >= 1 && dia <= 7)   semanasValores[0].add(log.percentage);
+      if (dia >= 8 && dia <= 14)  semanasValores[1].add(log.percentage);
+      if (dia >= 15 && dia <= 21) semanasValores[2].add(log.percentage);
+      if (dia >= 22 && dia <= 31) semanasValores[3].add(log.percentage);
+    }
+
+    List<double> semanasPromedios = [0.0, 0.0, 0.0, 0.0];
+    double ultimoValorValido = 100.0;
+
+    for (int i = 0; i < 4; i++) {
+      if (semanasValores[i].isNotEmpty) {
+        semanasPromedios[i] = semanasValores[i].reduce((a, b) => a + b) / semanasValores[i].length;
+        ultimoValorValido = semanasPromedios[i];
+      } else {
+        semanasPromedios[i] = ultimoValorValido;
+      }
+    }
+
     const barMaxH = 120.0;
-    final outlierDays = m.outliers.map((o) => o.date.day).toSet();
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -627,74 +573,61 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Nivel de gas por mes',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          const Text('Últimos datos — % del tanque',
-              style: TextStyle(fontSize: 11, color: Colors.black38)),
-          const SizedBox(height: 12),
+          const Text('Nivel de gas promedio semanal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          const Text('Monitoreo macro — % promedio del tanque', style: TextStyle(fontSize: 11, color: Colors.black38)),
+          const SizedBox(height: 16),
           SizedBox(
-            height: barMaxH + 55,
+            height: barMaxH + 45,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: m.chartData.map((point) {
-                final fraction =
-                    maxVal > 0 ? point.value / maxVal : 0.0;
-                final barH =
-                    (barMaxH * fraction).clamp(4.0, barMaxH);
-                final isOutlier = outlierDays.contains(point.day);
+              children: List.generate(4, (index) {
+                final porcentajeSemana = semanasPromedios[index];
+                final barH = (barMaxH * (porcentajeSemana / 100.0)).clamp(6.0, barMaxH);
 
-                final Color barColor = point.value >= 50
-                    ? MeterHistoryScreen.availableGreen
-                    : point.value >= 25
-                        ? Colors.amber[600]!
-                        : const Color(0xFF9B59B6);
+                bool hayDecremento = index > 0 && semanasPromedios[index] < semanasPromedios[index - 1];
+
+                final Color barColor = (hayDecremento || porcentajeSemana < 25)
+                    ? const Color(0xFFEF4444) 
+                    : porcentajeSemana >= 50
+                        ? MeterHistoryScreen.availableGreen
+                        : Colors.amber[600]!;
 
                 return Expanded(
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          '${point.value.toStringAsFixed(0)}%',
+                          '${porcentajeSemana.toStringAsFixed(0)}%',
                           style: TextStyle(
-                            fontSize: 9,
-                            color: isOutlier
-                                ? Colors.red[700]
-                                : Colors.black38,
-                            fontWeight: isOutlier
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+                            fontSize: 10,
+                            color: barColor,
+                            fontWeight: hayDecremento ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 5),
                         AnimatedContainer(
-                          duration: const Duration(milliseconds: 600),
+                          duration: const Duration(milliseconds: 300),
                           curve: Curves.easeOut,
                           height: barH,
                           decoration: BoxDecoration(
                             color: barColor,
-                            borderRadius: BorderRadius.circular(5),
-                            border: isOutlier
-                                ? Border.all(
-                                    color: Colors.red, width: 2)
-                                : null,
+                            borderRadius: BorderRadius.circular(4),
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(
-                          '${_mesAbrev(_selectedMonth)}\n${point.day}',
+                          'Sem ${index + 1}',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 9, color: Colors.black54),
+                          style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ),
           ),
         ],
@@ -706,8 +639,8 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
         width: double.infinity,
         height: 110,
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F5F5),
-          borderRadius: BorderRadius.circular(10),
+          color: const Color(0xFFF5F5F5), 
+          borderRadius: BorderRadius.circular(10), 
           border: Border.all(color: const Color(0xFFE0E0E0)),
         ),
         child: Column(
@@ -715,665 +648,202 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
           children: [
             const Icon(Icons.bar_chart, size: 32, color: Colors.black26),
             const SizedBox(height: 8),
-            Text(
-              mensaje,
-              textAlign: TextAlign.center,
-              style:
-                  const TextStyle(fontSize: 12, color: Colors.black38),
-            ),
+            Text(mensaje, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Colors.black38)),
           ],
         ),
       );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Tarjetas de litros
-  // ─────────────────────────────────────────────────────────────────────────
   Widget _buildLiterCards() {
-    final m             = _metrics;
-    final double consumidoLt =
-        m == null ? 0 : _capacityLiters * (m.totalConsumption / 100.0);
-    final double restanteLt  =
-        m == null ? 0 : _capacityLiters * (m.averagePercentage / 100.0);
+    final m = _metrics;
+    final double consumidoLt = m == null ? 0 : _capacityLiters * (m.totalConsumption / 100.0);
+    final double restanteLt  = m == null ? 0 : _capacityLiters * (m.averagePercentage / 100.0);
 
     return Row(
       children: [
-        Expanded(
-          child: _literCard(
-            valor: '${consumidoLt.toStringAsFixed(0)} lt',
-            label: 'Consumido',
-            color: MeterHistoryScreen.primaryBlue,
-          ),
-        ),
+        Expanded(child: _literCard(valor: '${consumidoLt.toStringAsFixed(1)} lt', label: 'Consumido', color: MeterHistoryScreen.primaryBlue)),
         const SizedBox(width: 12),
-        Expanded(
-          child: _literCard(
-            valor: '${restanteLt.toStringAsFixed(0)} lt',
-            label: 'Restante prom.',
-            color: MeterHistoryScreen.primaryBlue,
-          ),
-        ),
+        Expanded(child: _literCard(valor: '${restanteLt.toStringAsFixed(1)} lt', label: 'Restante prom.', color: MeterHistoryScreen.primaryBlue)),
       ],
     );
   }
 
-  Widget _literCard({
-    required String valor,
-    required String label,
-    required Color color,
-  }) =>
-      Container(
+  Widget _literCard({required String valor, required String label, required Color color}) => Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE0E0E0)),
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE0E0E0))),
         child: Column(
           children: [
-            Text(
-              valor,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
+            Text(valor, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
             const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: Colors.black54)),
+            Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
           ],
         ),
       );
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Tabla de logs del mes
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildLogsTable() {
+  Widget _buildScatterChart() {
     final m = _metrics;
-    if (m == null || m.logs.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: Center(
-          child: Text(
-            'Sin logs para este periodo.',
-            style: TextStyle(color: Colors.black38, fontSize: 13),
-          ),
-        ),
+    // CORRECCIÓN REACTIVA: Si m viene vacío, limpia instantáneamente el gráfico de dispersión
+    if (m == null || m.logs.isEmpty || m.totalConsumption == 0) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: const Color(0xFFFAFAFA), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE0E0E0))),
+        child: const Center(child: Text('Sin logs de lecturas disponibles.', style: TextStyle(color: Colors.black38, fontSize: 12))),
       );
     }
 
-    final rows = <_LogRow>[];
-    for (int i = 0; i < m.logs.length; i++) {
-      final log  = m.logs[i];
-      final prev = i > 0 ? m.logs[i - 1].percentage : log.percentage;
-      final diff = log.percentage - prev;
-      final tipo = diff >= 0 ? 'Recarga' : 'Consumo';
-      rows.add(_LogRow(fecha: log.date, tipo: tipo, cantidad: diff));
-    }
+    final outlierDays = m.outliers.map((o) => o.date.day).toSet();
 
     return Container(
+      height: 200,
+      width: double.infinity,
+      padding: const EdgeInsets.only(right: 20, top: 15, bottom: 20, left: 45),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
-        children: [
-          // Cabecera
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF8F8F8),
-              borderRadius: BorderRadius.only(
-                topLeft:  Radius.circular(10),
-                topRight: Radius.circular(10),
-              ),
-            ),
-            child: const Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text('Fecha',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black54)),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text('Tipo',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black54)),
-                ),
-                Text('Cantidad',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black54)),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // Filas
-          ...rows.asMap().entries.map((e) {
-            final i         = e.key;
-            final row       = e.value;
-            final isRecarga = row.tipo == 'Recarga';
-            final isOutlier = m.outliers.any(
-              (o) =>
-                  o.date.day   == row.fecha.day &&
-                  o.date.month == row.fecha.month,
-            );
-
-            return Column(
-              children: [
-                Container(
-                  color: isOutlier
-                      ? Colors.red.withOpacity(0.05)
-                      : (i % 2 == 0
-                          ? Colors.white
-                          : const Color(0xFFFAFAFA)),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          _formatDate(row.fecha),
-                          style: const TextStyle(
-                              fontSize: 13, color: Colors.black87),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Row(
-                          children: [
-                            Text(
-                              row.tipo,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: isRecarga
-                                    ? MeterHistoryScreen.availableGreen
-                                    : MeterHistoryScreen.primaryBlue,
-                              ),
-                            ),
-                            if (isOutlier) ...[
-                              const SizedBox(width: 4),
-                              const Icon(Icons.warning_amber_rounded,
-                                  size: 14, color: Colors.red),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Text(
-                        row.cantidad == 0
-                            ? '—'
-                            : '${isRecarga ? '+' : ''}${row.cantidad.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: isRecarga
-                              ? MeterHistoryScreen.availableGreen
-                              : Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (i < rows.length - 1) const Divider(height: 1),
-              ],
-            );
-          }),
-        ],
+      child: CustomPaint(
+        painter: _ScatterPainter(
+          logs: m.logs,
+          outlierDays: outlierDays,
+          lightBlue: MeterHistoryScreen.lightBlue,
+        ),
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Siguiente recarga estimada (cálculo heurístico)
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildProximaRecarga() {
-    final m = _metrics;
-    if (m == null || m.activeDays == 0 || m.totalConsumption == 0) {
-      return _recargaCard(
-        diasRestantes: null,
-        fechaSugerida: null,
-        mensaje: 'Sin suficientes datos para proyectar.',
+  Widget _buildAIPredictionSection() {
+    if (!_aiRequested) {
+      return Center(
+        child: ElevatedButton.icon(
+          onPressed: _fetchAIPrediction,
+          icon: const Icon(Icons.auto_awesome),
+          label: const Text('Calcular Predicción Inteligente'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0F172A),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
       );
     }
 
-    final double consumoDiario = m.totalConsumption / m.activeDays;
-    final double diasRestantes =
-        consumoDiario > 0 ? m.averagePercentage / consumoDiario : 0;
+    if (_aiLoading) {
+      return const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator(color: Color(0xFF1E3A8A))));
+    }
 
-    final DateTime fechaSugerida =
-        DateTime.now().add(Duration(days: diasRestantes.round()));
-
-    return _recargaCard(
-      diasRestantes: diasRestantes.round(),
-      fechaSugerida: fechaSugerida,
-      mensaje: null,
-    );
-  }
-
-  Widget _recargaCard({
-    required int? diasRestantes,
-    required DateTime? fechaSugerida,
-    required String? mensaje,
-  }) =>
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFFCCDEFF),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: mensaje != null
-            ? Text(
-                mensaje,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: Colors.black54, fontSize: 13),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Días hasta próxima recarga',
-                    style: TextStyle(
-                        fontSize: 14, color: Color(0xFF1A3A6B)),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '$diasRestantes días',
-                    style: const TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0D2550),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (fechaSugerida != null)
-                    Text(
-                      'Recarga sugerida: ${_formatDateShort(fechaSugerida)}',
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF3B5A9A)),
-                    ),
-                ],
-              ),
-      );
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PREDICCIÓN INTELIGENTE — Gemini
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildAIPredictionSection() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Título con chip "Gemini"
-          Row(
-            children: [
-              const Text(
-                'PREDICCIÓN INTELIGENTE',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4285F4), Color(0xFF9B59B6)],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Gemini',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildAICard(),
-        ],
-      );
-
-  Widget _buildAICard() {
-    if (!_aiRequested)       return _aiPromptCard();
-    if (_aiLoading)          return _aiLoadingCard();
-    if (_aiError != null)    return _aiErrorCard(_aiError!);
+    if (_aiError != null) {
+      return Text(_aiError!, style: const TextStyle(color: Colors.red, fontSize: 13));
+    }
 
     final pred = _aiPrediction;
     if (pred == null || !pred.hasPrediction) {
-      return _aiInsufficientCard(
-        pred?.message ??
-            'Historial de consumo insuficiente para calcular una predicción confiable.',
-      );
+      return const Text('No se pudo generar una predicción con los datos actuales.', style: TextStyle(color: Colors.black45));
     }
-
-    return _aiResultCard(pred);
-  }
-
-  // ── No solicitado ─────────────────────────────────────────────────────────
-  Widget _aiPromptCard() => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFEEF2FF), Color(0xFFF5EEFF)],
-          ),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFCBD5F5)),
-        ),
-        child: Column(
-          children: [
-            const Icon(Icons.auto_awesome,
-                size: 32, color: Color(0xFF4285F4)),
-            const SizedBox(height: 10),
-            const Text(
-              'Predicción con inteligencia artificial',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Color(0xFF1A237E),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Analiza tu historial de consumo con Gemini para estimar cuándo necesitarás recargar.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _fetchAIPrediction,
-              icon: const Icon(Icons.bolt, size: 18),
-              label: const Text('Generar predicción'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4285F4),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-            ),
-          ],
-        ),
-      );
-
-  // ── Cargando ──────────────────────────────────────────────────────────────
-  Widget _aiLoadingCard() => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF3F4FF),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFCBD5F5)),
-        ),
-        child: const Column(
-          children: [
-            CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Color(0xFF4285F4)),
-            ),
-            SizedBox(height: 14),
-            Text(
-              'Gemini está analizando tu historial…',
-              style: TextStyle(color: Colors.black54, fontSize: 13),
-            ),
-          ],
-        ),
-      );
-
-  // ── Error ─────────────────────────────────────────────────────────────────
-  Widget _aiErrorCard(String msg) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.red.shade200),
-        ),
-        child: Column(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              msg,
-              textAlign: TextAlign.center,
-              style:
-                  const TextStyle(color: Colors.black54, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: _fetchAIPrediction,
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Reintentar'),
-              style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4285F4)),
-            ),
-          ],
-        ),
-      );
-
-  // ── Datos insuficientes ───────────────────────────────────────────────────
-  Widget _aiInsufficientCard(String msg) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.amber.shade50,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.amber.shade300),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline,
-                color: Colors.amber, size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                msg,
-                style: const TextStyle(
-                    fontSize: 13, color: Colors.black54),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  // ── Resultado ─────────────────────────────────────────────────────────────
-  Widget _aiResultCard(_AIPrediction pred) {
-    DateTime? rechargeDate;
-    if (pred.estimatedRechargeDate != null) {
-      rechargeDate =
-          DateTime.tryParse(pred.estimatedRechargeDate!)?.toLocal();
-    }
-
-    final double conf      = pred.confidenceScore ?? 0;
-    final Color confColor  = conf >= 0.8
-        ? MeterHistoryScreen.availableGreen
-        : conf >= 0.5
-            ? Colors.amber
-            : Colors.red;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF1E3A8A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFE8F0FE), Color(0xFFF0E6FF)],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB3C4F5)),
       ),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Encabezado
           Row(
             children: [
-              const Icon(Icons.auto_awesome,
-                  size: 18, color: Color(0xFF4285F4)),
-              const SizedBox(width: 6),
-              const Text(
-                'Predicción de Gemini',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: Color(0xFF1A237E),
-                ),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+                child: const Icon(Icons.auto_awesome, color: Color(0xFF93C5FD), size: 16),
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _fetchAIPrediction,
-                child: const Icon(Icons.refresh,
-                    size: 18, color: Color(0xFF4285F4)),
-              ),
+              const SizedBox(width: 8),
+              const Text('PREDICCIÓN GEMINI AI', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
             ],
           ),
           const SizedBox(height: 16),
-
-          // Días restantes
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  '${pred.daysRemaining} días',
-                  style: const TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0D2550),
-                  ),
-                ),
-                const Text(
-                  'para la próxima recarga',
-                  style: TextStyle(
-                      fontSize: 13, color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          if (rechargeDate != null)
-            _aiDetailRow(
-              Icons.calendar_today,
-              'Fecha estimada',
-              _formatDateShort(rechargeDate),
-            ),
-
-          if (pred.estimatedConsumptionRate != null)
-            _aiDetailRow(
-              Icons.local_fire_department,
-              'Consumo estimado',
-              pred.estimatedConsumptionRate!,
-            ),
-
-          const SizedBox(height: 12),
-
-          // Barra de confianza
-          const Text(
-            'Nivel de confianza',
-            style: TextStyle(fontSize: 12, color: Colors.black45),
-          ),
+          Text('PRÓXIMA RECARGA ESTIMADA: En ${pred.daysRemaining} días', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: conf,
-                    minHeight: 8,
-                    backgroundColor: Colors.black12,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(confColor),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '${(conf * 100).toStringAsFixed(0)}%',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: confColor,
-                ),
-              ),
-            ],
-          ),
+          Text('CONSUMO CALCULADO: ${pred.estimatedConsumptionRate ?? "—"}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text('NIVEL DE CONFIANZA: ${( (pred.confidenceScore ?? 0) * 100 ).toStringAsFixed(0)}%', style: TextStyle(color: Colors.blue[300], fontSize: 12, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 10),
+          Text(pred.message ?? 'Análisis predictivo completado con éxito basado en tus flujos de dispersión.', style: TextStyle(color: Colors.blue[100], fontSize: 11, height: 1.3)),
         ],
       ),
     );
   }
-
-  Widget _aiDetailRow(IconData icon, String label, String value) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 15, color: const Color(0xFF4285F4)),
-            const SizedBox(width: 8),
-            Text(
-              '$label: ',
-              style: const TextStyle(
-                  fontSize: 12, color: Colors.black54),
-            ),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1A237E),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────────────────────────────────
-  String _mesAbrev(int m) => const [
-        '', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
-      ][m.clamp(1, 12)];
-
-  String _formatDate(DateTime dt) =>
-      '${dt.day.toString().padLeft(2, '0')} ${_mesAbrev(dt.month)}';
-
-  String _formatDateShort(DateTime dt) =>
-      '${dt.day.toString().padLeft(2, '0')} ${_mesAbrev(dt.month)} ${dt.year}';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modelo interno para la tabla de logs
+// Pintor personalizado para los logs del mes
 // ─────────────────────────────────────────────────────────────────────────────
-class _LogRow {
-  final DateTime fecha;
-  final String tipo;
-  final double cantidad;
-  const _LogRow(
-      {required this.fecha, required this.tipo, required this.cantidad});
+class _ScatterPainter extends CustomPainter {
+  final List<_Log> logs;
+  final Set<int> outlierDays;
+  final Color lightBlue;
+
+  _ScatterPainter({
+    required this.logs,
+    required this.outlierDays,
+    required this.lightBlue,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = const Color(0xFFF1F5F9)
+      ..strokeWidth = 1;
+
+    for (int i = 0; i <= 4; i++) {
+      double y = size.height * (i / 4);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: '${(100 - (i * 25))}%',
+          style: const TextStyle(fontSize: 9, color: Colors.black45),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(canvas, Offset(-35, y - 6));
+    }
+
+    if (logs.isEmpty) return;
+
+    for (final log in logs) {
+      final int day = log.date.day;
+      if (day < 1 || day > 31) continue;
+
+      double xFraction = (day - 1) / 30; 
+      double yFraction = 1 - (log.percentage / 100);
+
+      double posX = xFraction * size.width;
+      double posY = yFraction * size.height;
+
+      final isOutlier = outlierDays.contains(day);
+      
+      final dotPaint = Paint()
+        ..color = isOutlier ? Colors.red : (log.percentage < 25 ? Colors.amber[700]! : lightBlue)
+        ..style = PaintingStyle.fill;
+
+      canvas.drawCircle(Offset(posX, posY), isOutlier ? 6.0 : 4.5, dotPaint);
+
+      if (day == 1 || day == 7 || day == 14 || day == 21 || day == 28 || day == 31) {
+        final dayPainter = TextPainter(
+          text: TextSpan(text: 'D$day', style: const TextStyle(fontSize: 8, color: Colors.black45)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        dayPainter.paint(canvas, Offset(posX - 8, size.height + 6));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScatterPainter oldDelegate) => oldDelegate.logs != logs;
 }

@@ -198,7 +198,6 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
     if (ok) {
       // Éxito: regresa al Dashboard y muestra confirmación
       Navigator.pop(context, true); // true = fue eliminado (DashboardScreen recarga)
-      // El snackbar lo mostramos en el context del padre con .then() en DashboardScreen
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -214,19 +213,12 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // Mientras no hay lectura usamos 0 solo para pintar el layout; la UI lo
-    // señala con el indicador de carga superpuesto.
     final double percentSensor = _percentAvailable ?? 0;
     final bool   sinLectura    = _percentAvailable == null;
 
-    // ── Motor de cálculo ──────────────────────────────────────────────────
     final double restantes = _litrosRestantes(_capacityLiters, percentSensor);
     final double consumidos = _litrosConsumidos(_capacityLiters, restantes);
 
-    // El Scaffold está FUERA del ValueListenableBuilder para que el context
-    // del Navigator siempre tenga acceso a las rutas registradas en MaterialApp.
-    // El ValueListenableBuilder solo envuelve la fila de acciones que necesita
-    // reaccionar al cambio de estado de suscripción.
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -254,8 +246,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
                         _buildAlertBanner(percentSensor, sinLectura),
                         const SizedBox(height: 28),
 
-                        // ── Fila de acciones — solo esta parte escucha
-                        //    cambios de UserState
+                        // ── Fila de acciones ─────────────────────────
                         ValueListenableBuilder<UserState>(
                           valueListenable: StorageService.userStateNotifier,
                           builder: (_, __, ___) => _buildActionRow(context),
@@ -301,31 +292,22 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Header azul: "Metri GAS"
+  // Header azul: "Metri GAS" (Limpio, sin avatar de perfil)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
       color: MeterDashboardScreen.primaryBlue,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          const SizedBox(width: 36),
-          const Expanded(
-            child: Text(
-              'Metri GAS',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold,
-              ),
-            ),
+      child: const Center(
+        child: Text(
+          'Metri GAS',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
-          const CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, color: MeterDashboardScreen.primaryBlue, size: 18),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -454,9 +436,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Tarjetas de litros — valores calculados con las fórmulas del ticket
-  //   Restante  = CapacidadTotal × (PorcentajeSensor / 100)
-  //   Consumido = CapacidadTotal − Restante
+  // Tarjetas de litros
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildLitersSummary(double restantes, double consumidos, bool sinLectura) {
     return Row(
@@ -506,7 +486,6 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
           const SizedBox(height: 2),
           Text(subtitulo, style: const TextStyle(fontSize: 12, color: Colors.black54)),
           const SizedBox(height: 6),
-          // Fórmula explícita en pequeño para transparencia del cálculo
           Text(
             formula,
             textAlign: TextAlign.center,
@@ -518,7 +497,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Banner de alerta con color semántico
+  // Banner de alerta
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildAlertBanner(double percentSensor, bool sinLectura) {
     if (sinLectura) {
@@ -577,9 +556,6 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   // Fila de acciones
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildActionRow(BuildContext context) {
-    // ── PAYWALL ─────────────────────────────────────────────────────────────
-    // Bloqueado si: invitado  O  premium con isActive == false
-    // Desbloqueado si: premium con isActive == true  ÚNICAMENTE
     final bool desbloqueado = _historialDesbloqueado;
 
     return Row(
@@ -593,7 +569,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
           onTap: _isLoading || _isDeleting ? null : _loadTelemetry,
         ),
 
-      // Botón 2: Historial (con paywall)
+        // Botón 2: Historial (con paywall)
         _ActionButton(
           icon: desbloqueado ? Icons.history : Icons.lock,
           label: 'Historial\nde uso',
@@ -615,6 +591,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
                   )
               : () => _mostrarPaywallSnack(context),
         ),
+
         // Botón 3: Eliminar medidor
         _ActionButton(
           icon: Icons.delete_outline,
@@ -626,8 +603,6 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
     );
   }
 
-  /// Feedback visual cuando el usuario no-premium toca Historial.
-  /// En lugar de ignorar el tap silenciosamente, informa por qué está bloqueado.
   void _mostrarPaywallSnack(BuildContext context) {
     final state = StorageService.userStateNotifier.value;
     final String mensaje = state == UserState.guest
@@ -731,7 +706,7 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CustomPainter de la dona (sin cambios matemáticos)
+// CustomPainter de la dona
 // ─────────────────────────────────────────────────────────────────────────────
 class _GaugePainter extends CustomPainter {
   final double percentAvailable;
@@ -762,7 +737,6 @@ class _GaugePainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..strokeCap  = StrokeCap.round;
 
-    // Arco verde: disponible
     paint.color = availableColor;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
@@ -772,7 +746,6 @@ class _GaugePainter extends CustomPainter {
       paint,
     );
 
-    // Arco azul: consumido
     paint.color = consumedColor;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
