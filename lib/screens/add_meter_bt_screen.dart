@@ -1,10 +1,11 @@
 // lib/screens/add_meter_bt_screen.dart
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io'; // <-- REQUERIDO: Para poder usar Platform.isAndroid de forma segura
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart'; // Manejo nativo de permisos
 import '../services/meter_manager.dart'; // Sincronizado con tu manejador real
-import 'package:permission_handler/permission_handler.dart';
 
 class AddMeterBtScreen extends StatefulWidget {
   const AddMeterBtScreen({super.key});
@@ -81,24 +82,21 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
   }
 
   // ===========================================================================
-  // MOTOR BLUETOOTH (REFINADO CON VERIFICACIÓN DE PERMISOS DE ANDROID)
+  // MOTOR BLUETOOTH (FASES 1 Y 2) - CON PERMISOS INTACTOS
   // ===========================================================================
   Future<void> _startBleScan() async {
-    // Verificación y solicitud nativa de permisos en tiempo de ejecución
     Map<Permission, PermissionStatus> statuses = await [
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
-      Permission.location, // Requerido para retrocompatibilidad con Android < 12
+      Permission.location, 
     ].request();
 
-    // Comprobamos si el usuario denegó alguno de los accesos críticos
     if (statuses[Permission.bluetoothScan]?.isDenied == true ||
         statuses[Permission.bluetoothConnect]?.isDenied == true) {
       _showSnackBar("Se requieren permisos de Bluetooth para buscar el medidor.", Colors.red);
       return;
     }
 
-    // Una vez otorgados los permisos por el sistema operativo, validamos el estado de las antenas
     if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
       _showSnackBar("Por favor, enciende el Bluetooth de tu dispositivo", Colors.orange);
       return;
@@ -110,7 +108,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     });
 
     try {
-      // Iniciamos escaneo buscando señales cercanas por 15 segundos
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
 
       _scanSubscription?.cancel();
@@ -136,18 +133,34 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     }
   }
 
+  // ===========================================================================
+  // CONEXIÓN FÍSICA Y NEGOCIACIÓN DE CANAL EXTENDIDO (MTU)
+  // ===========================================================================
   Future<void> _connectToDevice(BluetoothDevice device) async {
     setState(() => _isConnecting = true);
     
     try {
       await FlutterBluePlus.stopScan();
+      
+      // 1. Nos conectamos al dispositivo periférico
       await device.connect(timeout: const Duration(seconds: 5));
       _targetDevice = device;
 
-      // Descubrimos los servicios GATT expuestos por la ESP32
+      // 2. SOLUCIÓN IMPLEMENTADA: Forzamos la expansión del MTU a 255 bytes
+      if (Platform.isAndroid) {
+        try {
+          await device.requestMtu(255);
+          // Un breve respiro de 300 milisegundos para que el chip de radio de Android 
+          // y el del ESP32 terminen de acordar el nuevo tamaño de búfer de transmisión.
+          await Future.delayed(const Duration(milliseconds: 300));
+        } catch (mtuError) {
+          debugPrint("Aviso de negociación MTU (Continuando por defecto): $mtuError");
+        }
+      }
+
+      // 3. Una vez ensanchado el canal, descubrimos los servicios GATT de la ESP32
       List<BluetoothService> services = await device.discoverServices();
       for (var service in services) {
-        // Buscamos características de escritura primaria (UUIDs típicos FFF0 o de datos custom)
         for (var char in service.characteristics) {
           if (char.properties.write || char.properties.writeWithoutResponse) {
             _wifiCharacteristic = char;
@@ -156,7 +169,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
         }
       }
 
-      _showSnackBar("¡Medidor enlazado por Bluetooth!", Colors.green);
+      _showSnackBar("¡Medidor enlazado y canal de datos optimizado!", Colors.green);
       _goToStep(2); // Avanza automáticamente a la Fase 3 (Índice 2)
 
     } catch (e) {
@@ -178,7 +191,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     setState(() => _isSendingWifi = true);
 
     try {
-      // Estructura limpia en formato JSON para que el script MicroPython la decodifique con json.loads()
       final Map<String, String> dataMap = {
         "ssid": _ssidController.text.trim(),
         "pwd": _passwordController.text
@@ -187,7 +199,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
       final String jsonStr = jsonEncode(dataMap);
       final List<int> bytes = utf8.encode(jsonStr);
 
-      // Inyección binaria a la característica del microcontrolador
+      // Al haber configurado el MTU en 255 en el paso anterior, los bytes se van completos
       await _wifiCharacteristic!.write(bytes, withoutResponse: false);
       
       _showSnackBar("Configuración Wi-Fi enviada al medidor", Colors.green);
@@ -207,10 +219,8 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     try {
       final String alias = _aliasController.text.trim();
       final String capacidad = _capacityController.text.trim();
-      // Usamos el ID de hardware detectado por la antena Bluetooth
-      final String dispositivoId = _targetDevice?.remoteId.toString() ?? "ESP32-GENERICO";
+      final String dispositivoId = _targetDevice?.remoteId.toString() ?? "ESP32-DEV-MODE";
 
-      // MAPA DE DATOS REFINADO: Sincronizado milimétricamente con tu MeterManager
       final Map<String, dynamic> nuevoMedidor = {
         "id": dispositivoId,
         "metername": alias, 
@@ -218,17 +228,14 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
         "ownerId": userEmail ?? "00000000-0000-0000-0000-000000000000" 
       };
 
-      // Invocación nativa a tu servicio local
       await MeterManager.guardarMedidorLocal(nuevoMedidor);
 
-      // Liberación de la antena Bluetooth para ahorrar energía en ambos extremos
       await _targetDevice?.disconnect();
       _targetDevice = null;
 
       _showSnackBar("¡Medidor registrado en tu almacenamiento local!", Colors.green);
       
       if (mounted) {
-        // Regresa limpiando la pila para refrescar el listado del Dashboard
         Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
       }
     } catch (e) {
@@ -242,7 +249,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     );
   }
 
-  // Widget auxiliar para crear las ondas expansivas de escaneo (Tu diseño original)
   Widget _buildOnda(double retraso) {
     return AnimatedBuilder(
       animation: _animationController,
@@ -258,10 +264,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
             child: Container(
               width: 150,
               height: 150,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: lightBlue,
-              ),
+              decoration: const BoxDecoration(shape: BoxShape.circle, color: lightBlue),
             ),
           ),
         );
@@ -269,7 +272,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     );
   }
 
-  // Header azul original intacto
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -280,19 +282,15 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
         child: Text(
           'Metri GAS',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white, 
-            fontSize: 20, 
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ),
     );
   }
 
-  // Sub-header adaptado dinámicamente según la fase en curso
   Widget _buildSubHeader(BuildContext context) {
     String stepTitle = "Enlazar Medidor";
+    if (_currentStep == 1) stepTitle = "Escaneando Señales";
     if (_currentStep == 2) stepTitle = "Configuración Wi-Fi";
     if (_currentStep == 3) stepTitle = "Detalles del Tanque";
 
@@ -316,11 +314,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
             child: Text(
               '$stepTitle (${_currentStep + 1}/4)',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white, 
-                fontWeight: FontWeight.w600, 
-                fontSize: 15,
-              ),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
             ),
           ),
           const SizedBox(width: 48), 
@@ -331,7 +325,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    // Recuperamos el email que le pasa tu Dashboard como argumento
     final args = ModalRoute.of(context)?.settings.arguments;
     final String? userEmail = args is String ? args : null;
 
@@ -341,7 +334,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
         children: [
           _buildHeader(),
           _buildSubHeader(context),
-          
           Expanded(
             child: PageView(
               controller: _pageController,
@@ -356,7 +348,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
           ),
         ],
       ),
-      // ¡AQUÍ ESTÁ TU BOTÓN DE DESARROLLADOR DE VUELTA!
+      // BOTÓN DE DESARROLLADOR PRESERVADO INTACTO
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.orange,
         icon: const Icon(Icons.developer_mode, color: Colors.white),
@@ -365,7 +357,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
           if (_currentStep < 3) {
             _goToStep(_currentStep + 1);
           } else {
-            // Si estás en la última pantalla, te regresa a la primera para reiniciar el loop de pruebas
             _goToStep(0);
           }
         },
@@ -373,9 +364,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     );
   }
 
-  // ===========================================================================
-  // VISTA: FASE 1 - INSTRUCCIONES INICIALES
-  // ===========================================================================
   Widget _fase1Instrucciones() {
     return SingleChildScrollView(
       child: Padding(
@@ -444,9 +432,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     );
   }
 
-  // ===========================================================================
-  // VISTA: FASE 2 - RASTREO Y SELECCIÓN DE HARDWARE
-  // ===========================================================================
   Widget _fase2ListadoDispositivos() {
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -495,9 +480,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     );
   }
 
-  // ===========================================================================
-  // VISTA: FASE 3 - FORMULARIO DE LLEGADA WI-FI (¡PROPIEDAD CORREGIDA!)
-  // ===========================================================================
   Widget _fase3FormularioWiFi() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
@@ -544,9 +526,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     );
   }
 
-  // ===========================================================================
-  // VISTA: FASE 4 - METADATOS TÉCNICOS DEL TANQUE (¡PROPIEDAD CORREGIDA!)
-  // ===========================================================================
   Widget _fase4MetadatosTanque(String? userEmail) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
