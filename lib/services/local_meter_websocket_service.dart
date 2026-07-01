@@ -24,7 +24,7 @@ class LocalMeterWebSocketService {
     return result;
   }
 
-  /// Envía un mapa JSON cifrado a un host específico por medio de WebSockets nativos (dart:io)
+/// Envía un mapa JSON cifrado a un host específico por medio de WebSockets nativos (dart:io)
   /// y retorna la respuesta decodificada del hardware.
   static Future<Map<String, dynamic>> sendCommand({
     required String hostname,
@@ -33,11 +33,24 @@ class LocalMeterWebSocketService {
   }) async {
     WebSocket? webSocket;
     try {
-      // 1. Limpieza preventiva del Hostname
-      final String targetHost = hostname.replaceAll('http://', '').replaceAll('ws://', '');
-      final String wsUrl = "ws://$targetHost:$_port";
+      // 1. Limpieza estricta del Hostname para evitar esquemas duplicados
+      // Quitamos cualquier rastro previo de ws://, wss:// o http://
+      String cleanHost = hostname
+          .replaceAll('ws://', '')
+          .replaceAll('wss://', '')
+          .replaceAll('http://', '')
+          .replaceAll('https://', '')
+          .trim();
 
-      // 2. Apertura del canal WebSocket nativo (Apretón de manos HTTP Upgrade automático)
+      // HARDCODEO DE PRUEBA EN HOTSPOT:
+      // Si quieres forzar que SIEMPRE use la IP del ESP32 en el hotspot, descomenta la línea de abajo:
+      // cleanHost = "10.202.246.147";
+
+      // 2. Construcción correcta de la URL del WebSocket
+      final String wsUrl = "ws://$cleanHost:$_port";
+      print("🔌 Conectando vía WebSocket a: $wsUrl");
+
+      // Conexión nativa con un timeout preventivo
       webSocket = await WebSocket.connect(wsUrl).timeout(timeout);
 
       // 3. Serialización y cifrado LCG del comando JSON
