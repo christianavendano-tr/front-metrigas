@@ -221,13 +221,12 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
   // ===========================================================================
   // FASE FINAL: REGISTRO LOCAL Y BAUTIZO VÍA WEBSOCKET SIMULTÁNEO
   // ===========================================================================
-  Future<void> _finalizarConfiguracionMedidor(String? userEmail) async {
+  // Cambia el valor por defecto de 'metrigas.local' a tu IP fija del Hotspot para las pruebas
+  Future<void> _finalizarConfiguracionMedidor(String? userEmail, {String targetHost = '10.202.246.147'}) async {
     final String alias = _aliasController.text.trim();
     final String capacidad = _capacityController.text.trim();
-    final String dispositivoId =
-        _targetDevice?.remoteId.toString() ?? "ESP32-DEV-MODE";
+    final String dispositivoId = _targetDevice?.remoteId.toString() ?? "ESP32-DEV-MODE";
 
-    // 1. Mostrar diálogo bloqueante de carga (Utilizando 'content' de forma correcta)
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -236,12 +235,12 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           child: Row(
             children: [
-              CircularProgressIndicator(color: lightBlue),
+              const CircularProgressIndicator(color: lightBlue),
               const SizedBox(width: 24),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  "Bautizando medidor vía Wi-Fi...\nPor favor, asegúrate de estar en la misma red.",
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  "Conectando por WebSocket con el hardware en $targetHost...\nPor favor, espera.",
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -251,20 +250,17 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
     );
 
     try {
-      // 2. Enviar el comando de asignación de nombre por WebSocket al hardware local
-      // Nota: Reemplazar 'metrigas.local' por la IP o DNS mDNS real de tu firmware
+      // Invoca el servicio enviando la IP limpia gracias al ajuste anterior
       await LocalMeterWebSocketService.sendCommand(
-        hostname: 'metrigas.local',
+        hostname: targetHost, 
         commandJson: {
           "action": ["set_name", alias, dispositivoId]
         },
         timeout: const Duration(seconds: 8),
       );
 
-      // Si la comunicación WebSocket es exitosa, removemos el diálogo de carga
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context); // Cierra el diálogo de carga
 
-      // 3. Persistencia en caché local compatible con la estructura de Postgres mediante MeterManager
       final Map<String, dynamic> nuevoMedidor = {
         "id": dispositivoId,
         "metername": alias,
@@ -273,27 +269,19 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
       };
 
       await MeterManager.guardarMedidorLocal(nuevoMedidor);
-
-      // Desconexión e inicio limpio del periférico de radio Bluetooth
       await _targetDevice?.disconnect();
       _targetDevice = null;
 
-      _showSnackBar("¡Enlace verificado y medidor registrado con éxito!", Colors.green);
+      _showSnackBar("¡Enlace verificado con éxito por WebSocket en $targetHost!", Colors.green);
 
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(
-            context, '/dashboard', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
       }
     } catch (e) {
-      // Si la verificación Wi-Fi / WebSocket local falla, cerramos el diálogo y alertamos
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context); // Cierra el diálogo de carga
       
-      debugPrint("❌ [Error en Bautizo local por WebSocket]: $e");
-      
-      // Muestra el error técnico real en el SnackBar para saber exactamente qué falló
-      _showSnackBar(
-          "Fallo de verificación: ${e.toString().replaceAll("Exception:", "")}",
-          Colors.red);
+      debugPrint("❌ [Error en Bautizo WebSocket]: $e");
+      _showSnackBar("Fallo: ${e.toString().replaceAll("Exception:", "").trim()}", Colors.red);
     }
   }
 
