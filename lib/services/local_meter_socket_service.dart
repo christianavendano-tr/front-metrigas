@@ -27,7 +27,7 @@ class LocalMeterSocketService {
   /// Cyphered JSON map sent to specific host
   /// by TCP y and returning coded meter response.
   static Future<Map<String, dynamic>> sendCommand({
-    required String hostname,
+    required String hostname, //quitar espacio y guiones bajos, convertir a -
     required Map<String, dynamic> commandJson,
     Duration timeout = const Duration(seconds: 7),
   }) async {

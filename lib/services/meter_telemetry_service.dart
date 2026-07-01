@@ -45,7 +45,7 @@ class MeterTelemetryService {
   // mDNS local
   // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchFromLocalMdns(String hardwareId) async {
-    final url = Uri.parse('http://metrigas-$hardwareId.local/api/status');
+    final url = Uri.parse('http://metrigas-$hardwareId.local');
     final response = await http.get(url).timeout(_localTimeout);
 
     if (response.statusCode != 200) {
@@ -54,7 +54,8 @@ class MeterTelemetryService {
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final percent = _extractPercentage(data);
-    if (percent == null) throw const FormatException('mDNS sin porcentaje válido');
+    if (percent == null)
+      throw const FormatException('mDNS sin porcentaje válido');
 
     return TelemetryReading(
       percentAvailable: percent,
@@ -72,8 +73,8 @@ class MeterTelemetryService {
   // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchLastLogFromCloud(String hardwareId) async {
     // CORRECCIÓN: Agregamos el 'await' para obtener el String real del token
-    final token = "750f9994-8d29-4353-8379-8e4e3bd95237"; 
-    
+    final token = SessionService.getToken();
+
     final url = Uri.parse(
       '$_cloudBaseUrl/logs?meterId=$hardwareId&page=1&limit=1',
     );
@@ -84,8 +85,7 @@ class MeterTelemetryService {
       url,
       headers: {
         'Content-Type': 'application/json',
-        // Si el token es válido, se inyecta correctamente en los Headers protegidos
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        'Authorization': 'Bearer $token',
       },
     ).timeout(_cloudTimeout);
 
@@ -111,7 +111,8 @@ class MeterTelemetryService {
       return null;
     }
 
-    final rawDate = entry['meditionDate'] ?? entry['createdAt'] ?? entry['timestamp'];
+    final rawDate =
+        entry['meditionDate'] ?? entry['createdAt'] ?? entry['timestamp'];
     final timestamp = rawDate is String ? DateTime.tryParse(rawDate) : null;
 
     debugPrint('✅ [Telemetry] Lectura cloud: $percent% @ $timestamp');
@@ -141,9 +142,10 @@ class MeterTelemetryService {
     // CAPTURA: Si el backend responde con el formato estadístico de consultMeters
     if (decoded['ok'] == true && decoded['data'] is Map) {
       final dataObj = decoded['data'] as Map<String, dynamic>;
-      
+
       // Si el backend calculó un porcentaje promedio global para el medidor, lo empaquetamos al vuelo
-      if (dataObj.containsKey('porcentaje_promedio') && dataObj['porcentaje_promedio'] != 0) {
+      if (dataObj.containsKey('porcentaje_promedio') &&
+          dataObj['porcentaje_promedio'] != 0) {
         return {
           'currentPercentage': dataObj['porcentaje_promedio'],
           'meditionDate': dataObj['fecha_ultimo_log'],
