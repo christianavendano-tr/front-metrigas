@@ -4,21 +4,56 @@ import 'dart:io';
 import 'dart:typed_data';
 
 class SocketLcgService {
-  // ---------------------------------------------------------------------
-  // Parámetros del LCG. DEBEN coincidir EXACTAMENTE con el servidor.
-  // Tomados del cliente Python que ya funciona:
-  //   x = (x * A + B) % BASE
-  //   byte_cifrado = byte_plano XOR (x % 256)
-  // ---------------------------------------------------------------------
   static const int _initialX = 256;
   static const int _a = 1103515245;
   static const int _b = 12345;
   static const int _base = 42; // seed
 
-  /// Aplica el flujo LCG + XOR sobre [source]. Como el XOR es simétrico,
-  /// esta misma función sirve para cifrar y, si algún día el servidor
-  /// también cifra su respuesta, para descifrar (siempre que reinicie
-  /// el estado igual que aquí, con _initialX en cada mensaje).
+  static double? parsePercentageFromResponse(Map<String, dynamic>? response) {
+    if (response == null) {
+      return null;
+    }
+
+    final dynamic rawStatus = response['status'];
+    if (rawStatus is! List) {
+      return null;
+    }
+
+    for (final entry in rawStatus) {
+      if (entry is num) {
+        return entry.toDouble();
+      }
+
+      if (entry is String) {
+        final parsed = double.tryParse(entry);
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static bool isResetConfirmed(Map<String, dynamic>? response) {
+    if (response == null) {
+      return false;
+    }
+
+    final dynamic rawStatus = response['status'];
+    if (rawStatus is! List) {
+      return false;
+    }
+
+    return rawStatus.any((entry) {
+      if (entry is String) {
+        return entry.toLowerCase() == 'ok' ||
+            entry.toLowerCase() == 'factory_reset_initiated';
+      }
+      return false;
+    });
+  }
+
   static Uint8List _lcgTransform(Uint8List source) {
     final Uint8List result = Uint8List(source.length);
     int x = _initialX;
@@ -30,36 +65,36 @@ class SocketLcgService {
     return result;
   }
 
-  /// FUNCIÓN PRINCIPAL: recibe el [commandJson], lo cifra con el LCG,
-  /// abre el WebSocket, lo envía, espera la respuesta del servidor
-  /// y la retorna ya decodificada como Map.
-  ///
-  /// [host] puede ser una IP ("192.168.1.105") o hostname.
-  /// [port] por defecto 8765, igual que en el cliente Python.
   static Future<Map<String, dynamic>> sendCommand({
-    required String host,
+    required String mdnsName,
     int port = 8765,
     required Map<String, dynamic> commandJson,
     Duration timeout = const Duration(seconds: 7),
   }) async {
     WebSocket? socket;
     try {
-      // 1. Limpieza básica del host, igual que en tu ejemplo
-      final String targetHost = host.replaceAll(' ', '-').replaceAll('_', '-');
+      // 1. Normalización del nombre mDNS: espacios y "-" -> "_"
+      String targetHost =
+          mdnsName.trim().replaceAll(' ', '-').replaceAll('_', '-');
 
-      // 2. Apertura del WebSocket (handshake HTTP incluido)
+      // 2. Aseguramos el sufijo .local requerido por mDNS
+      if (!targetHost.endsWith('.local')) {
+        targetHost = '$targetHost.local';
+      }
+
+      // 3. Apertura del WebSocket (handshake HTTP incluido)
       final Uri uri = Uri.parse('ws://$targetHost:$port');
       socket = await WebSocket.connect(uri.toString()).timeout(timeout);
 
-      // 3. Serialización y cifrado LCG del comando
+      // 4. Serialización y cifrado LCG del comando
       final String rawString = jsonEncode(commandJson);
       final Uint8List plainBytes = Uint8List.fromList(utf8.encode(rawString));
       final Uint8List encryptedBytes = _lcgTransform(plainBytes);
 
-      // 4. Envío del payload cifrado como frame binario
+      // 5. Envío del payload cifrado como frame binario
       socket.add(encryptedBytes);
 
-      // 5. Espera de la respuesta (viene en texto/JSON plano, sin cifrar,
+      // 6. Espera de la respuesta (viene en texto/JSON plano, sin cifrar,
       //    igual que en el cliente Python de referencia)
       final dynamic rawResponse = await socket.first.timeout(timeout);
 
@@ -67,9 +102,10 @@ class SocketLcgService {
       if (rawResponse is String) {
         jsonResponseStr = rawResponse;
       } else if (rawResponse is List<int>) {
-        jsonResponseStr = utf8.decode(rawResponse);
+        // jsonResponseStr = utf8.decode(rawResponse);
         // Si en algún momento el servidor SÍ cifra la respuesta, sería:
-        // jsonResponseStr = utf8.decode(_lcgTransform(Uint8List.fromList(rawResponse)));
+        jsonResponseStr =
+            utf8.decode(_lcgTransform(Uint8List.fromList(rawResponse)));
       } else {
         throw Exception(
             'Tipo de respuesta no soportado: ${rawResponse.runtimeType}');
@@ -77,7 +113,7 @@ class SocketLcgService {
 
       return jsonDecode(jsonResponseStr) as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('Error de comunicación con $host:$port -> $e');
+      throw Exception('Error de comunicación con $mdnsName:$port -> $e');
     } finally {
       await socket?.close();
     }

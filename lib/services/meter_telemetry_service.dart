@@ -72,17 +72,52 @@ class MeterTelemetryService {
   // Fallback cloud CORREGIDO: GET /logs?meterId=:id&page=1&limit=1
   // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchLastLogFromCloud(String hardwareId) async {
-    // CORRECCIÓN: Agregamos el 'await' para obtener el String real del token
     final token = SessionService.getToken();
 
-    final url = Uri.parse(
+    final detailUrl = Uri.parse('$_cloudBaseUrl/logs/$hardwareId');
+    debugPrint('🔍 [Telemetry] GET $detailUrl');
+
+    final detailResponse = await http.get(
+      detailUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    ).timeout(_cloudTimeout);
+
+    debugPrint('🔍 [Telemetry] Status: ${detailResponse.statusCode}');
+    debugPrint('🔍 [Telemetry] Body:   ${detailResponse.body}');
+
+    if (detailResponse.statusCode == 200) {
+      final decoded = jsonDecode(detailResponse.body);
+      final percent = extractCurrentPercentageFromDetailResponse(decoded);
+
+      if (percent != null) {
+        final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+        final rawDate = data is Map<String, dynamic>
+            ? (data['meditionDate'] ?? data['createdAt'] ?? data['timestamp'])
+            : null;
+        final timestamp = rawDate is String ? DateTime.tryParse(rawDate) : null;
+
+        debugPrint(
+            '✅ [Telemetry] Lectura cloud detalle: $percent% @ $timestamp');
+
+        return TelemetryReading(
+          percentAvailable: percent,
+          source: TelemetrySource.cloudFallback,
+          timestamp: timestamp,
+        );
+      }
+    }
+
+    final summaryUrl = Uri.parse(
       '$_cloudBaseUrl/logs?meterId=$hardwareId&page=1&limit=1',
     );
 
-    debugPrint('🔍 [Telemetry] GET $url');
+    debugPrint('🔍 [Telemetry] GET $summaryUrl');
 
     final response = await http.get(
-      url,
+      summaryUrl,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -96,7 +131,6 @@ class MeterTelemetryService {
       throw Exception('GET /logs respondió ${response.statusCode}');
     }
 
-    // El resto del código que ya tenías está perfecto...
     final decoded = jsonDecode(response.body);
     final entry = _firstEntryFrom(decoded);
 
@@ -115,7 +149,7 @@ class MeterTelemetryService {
         entry['meditionDate'] ?? entry['createdAt'] ?? entry['timestamp'];
     final timestamp = rawDate is String ? DateTime.tryParse(rawDate) : null;
 
-    debugPrint('✅ [Telemetry] Lectura cloud: $percent% @ $timestamp');
+    debugPrint('✅ [Telemetry] Lectura cloud resumen: $percent% @ $timestamp');
 
     return TelemetryReading(
       percentAvailable: percent,
@@ -165,6 +199,29 @@ class MeterTelemetryService {
           return inner.first as Map<String, dynamic>?;
         }
       }
+    }
+
+    return null;
+  }
+
+  static double? extractCurrentPercentageFromDetailResponse(
+      Map<String, dynamic>? json) {
+    if (json == null) {
+      return null;
+    }
+
+    final dynamic data = json['data'];
+    if (data is! Map) {
+      return null;
+    }
+
+    final dynamic raw = data['currentPercentage'];
+    if (raw is num) {
+      return raw.toDouble();
+    }
+
+    if (raw is String) {
+      return double.tryParse(raw);
     }
 
     return null;
