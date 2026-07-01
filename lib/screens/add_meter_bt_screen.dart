@@ -289,8 +289,10 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
       if (mounted) Navigator.pop(context);
       
       debugPrint("❌ [Error en Bautizo local por WebSocket]: $e");
+      
+      // Muestra el error técnico real en el SnackBar para saber exactamente qué falló
       _showSnackBar(
-          "No se pudo verificar el enlace Wi-Fi con el hardware. Asegúrate de estar en la misma red de 2.4GHz.",
+          "Fallo de verificación: ${e.toString().replaceAll("Exception:", "")}",
           Colors.red);
     }
   }
