@@ -250,25 +250,30 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
     );
 
     try {
-      // Invoca el servicio enviando la IP limpia gracias al ajuste anterior
-      await LocalMeterWebSocketService.sendCommand(
-        hostname: targetHost, 
+      // 1. Se envía el comando por el WebSocket. Si el hardware responde (con lo que sea), la promesa se cumple.
+      final Map<String, dynamic> respuestaHardware = await LocalMeterWebSocketService.sendCommand(
+        hostname: targetHost,
         commandJson: {
           "action": ["set_name", alias, dispositivoId]
         },
         timeout: const Duration(seconds: 8),
       );
 
-      if (mounted) Navigator.pop(context); // Cierra el diálogo de carga
+      if (mounted) Navigator.pop(context); // Cierra el diálogo de carga sin problemas
 
+      // =======================================================================
+      // SOLUCIÓN CORREGIDA (Línea 170 limpia)
+      // =======================================================================
       final Map<String, dynamic> nuevoMedidor = {
-        "id": dispositivoId,
-        "metername": alias,
-        "capacity": capacidad,
+        "id": dispositivoId,               // Tu MAC / ID físico real detectado por Bluetooth
+        "metername": alias,                // El string real que el usuario tecleó
+        "capacity": capacidad,             // El litraje numérico del formulario
         "ownerId": userEmail ?? "00000000-0000-0000-0000-000000000000"
       };
 
+      // 2. Persistencia local limpia en SharedPreferences a través de tu MeterManager
       await MeterManager.guardarMedidorLocal(nuevoMedidor);
+      
       await _targetDevice?.disconnect();
       _targetDevice = null;
 
