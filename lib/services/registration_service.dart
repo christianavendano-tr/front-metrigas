@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 class RegistrationService {
   static const String baseUrl = 'http://localhost:3000';
   
-  // MODIFICADO: Formato alfanumérico válido para saltar el class-validator de Nest.js
   static const String premiumPriceId = 'price_1QJ45zRFZd5tQ6sqTU3fSPET';
 
   static final Dio _dio = Dio(BaseOptions(
@@ -19,7 +18,6 @@ class RegistrationService {
       error: true,
     ));
 
-  // Estado transicional en memoria RAM
   static String? _temporaryEmail;
   static String? _temporaryJwtToken;
 
@@ -34,7 +32,7 @@ class RegistrationService {
     _temporaryJwtToken = null;
   }
 
-  /// 1. POST /auth/signup - ¡ENDPOINT CORREGIDO AQUÍ!
+  /// 1. POST /auth/signup
   static Future<Response> signUp({
     required String username,
     required String email,
@@ -42,7 +40,7 @@ class RegistrationService {
     required String pwd,
   }) async {
     return await _dio.post(
-      '/auth/signup', // Antes decía '/signup'
+      '/auth/signup',
       data: {
         'email': email,
         'username': username,
@@ -52,7 +50,7 @@ class RegistrationService {
     );
   }
 
-  /// 2. POST /auth/verify - Validación OTP
+  /// 2. POST /auth/verify
   static Future<Response> verifyCode({
     required String email,
     required String code,
@@ -66,14 +64,14 @@ class RegistrationService {
     );
   }
   
-  /// 3. POST /auth/paymethods - Actualizado para recibir MailDto y procesar Stripe Checkout
+  /// 3. POST /auth/paymethods
   static Future<Response> createSubscription({
     required String email,
   }) async {
     return await _dio.post(
       '/auth/paymethods', 
       data: {
-        'email': email, // Cambiado de 'userEmail' a 'email' para que Nest.js lo lea perfectamente
+        'email': email,
       },
       options: Options(
         headers: {

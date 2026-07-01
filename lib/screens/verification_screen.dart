@@ -5,11 +5,11 @@ import '../widgets/auth_card_scaffold.dart';
 import 'new_password_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
-  /// Correo al que se envió el código. Si se provee, esta pantalla asume
-  /// que viene del flujo de "olvidé mi contraseña": solo captura el código
-  /// y lo pasa a NewPasswordScreen, donde se define la nueva contraseña.
-  /// Si se omite, cae al flujo original de registro (POST /auth/verify)
-  /// usando RegistrationService.temporaryEmail.
+  /// Mail were the code was sent. if provided, this screen takes
+  /// for granted that the user comes from "forgot passweord screen and only validates the code
+  /// and passes it to NewPasswordScreen, where the new psw is defined.
+  /// If omitted, it follows the original register flux (POST /auth/verify)
+  /// using RegistrationService.temporaryEmail.
   final String? email;
 
   const VerificationScreen({super.key, this.email});
@@ -19,14 +19,13 @@ class VerificationScreen extends StatefulWidget {
 }
 
 class _VerificationScreenState extends State<VerificationScreen> {
-  // 6 cajas para los 6 caracteres del código
   final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   bool _isLoading = false;
 
-  // true => viene del flujo de recuperación de contraseña (email explícito por constructor)
-  // false => viene del flujo de registro (usa RegistrationService.temporaryEmail)
+  // true => forgot pwd flux
+  // false => register user flux
   bool get _isPasswordRecovery => widget.email != null;
 
   String? get _targetEmail => widget.email ?? RegistrationService.temporaryEmail;
@@ -43,7 +42,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _verifyToken() async {
-    // Barrera invisible: si ya está cargando, ignora cualquier clic extra
     if (_isLoading) return;
 
     final pin = _controllers.map((c) => c.text).join();
@@ -60,9 +58,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
 
     if (_isPasswordRecovery) {
-      // Aquí no se valida contra el backend todavía: el código de
-      // recuperación se valida junto con la nueva contraseña en
-      // POST /auth/checkemailpwd, dentro de NewPasswordScreen.
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -82,9 +77,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
-  /// Flujo de registro: POST /auth/verify
-  /// Valida el código de 6 dígitos. Si falla o expira, el backend elimina
-  /// al usuario de la BD por seguridad (no activa la cuenta; eso ocurre con el pago).
+  /// Register flux: POST /auth/verify
+  /// Validates de code, if its incorrect the backend deletes the user
+  /// from de database
   Future<void> _verifyForRegistration({required String email, required String pin}) async {
     try {
       final response = await RegistrationService.verifyCode(email: email, code: pin);
@@ -92,15 +87,12 @@ class _VerificationScreenState extends State<VerificationScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (mounted) {
           _showSnackBar('¡Cuenta verificada con éxito!', Colors.green);
-          // El endpoint no devuelve token; el usuario inicia sesión por separado.
           Navigator.pushNamedAndRemoveUntil(context, '/subscription', (route) => false);
         }
       }
     } on DioException catch (e) {
       final errorData = e.response?.data;
 
-      // Tolerancia ante reintentos de red: si el backend dice que ya estaba
-      // verificada, lo tratamos como éxito.
       if (errorData != null && errorData['message'] == "La cuenta ya está verificada") {
         if (mounted) {
           _showSnackBar('¡Cuenta lista! Procediendo...', Colors.green);
