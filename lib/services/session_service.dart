@@ -7,7 +7,7 @@ class SessionService {
   static String? _accessToken;
 
   static String getURL() {
-    return 'http://localhost:3000';
+    return 'https://back-metrigas-production.up.railway.app';
   }
 
   /// Gets token from memory when starting app
