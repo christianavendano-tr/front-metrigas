@@ -35,7 +35,7 @@ class LocalMeterWebSocketService {
     try {
       // 1. Limpieza preventiva del Hostname
       final String targetHost = hostname.replaceAll('http://', '').replaceAll('ws://', '');
-      final String wsUrl = "10.202.246.147:$_port";
+      final String wsUrl = "ws://10.202.246.147:$_port";
 
       // 2. Apertura del canal WebSocket nativo (Apretón de manos HTTP Upgrade automático)
       webSocket = await WebSocket.connect(wsUrl).timeout(timeout);
