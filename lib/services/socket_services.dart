@@ -3,9 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// Servicio para comunicarse por WebSocket con un servidor que espera
-/// los mensajes cifrados con un LCG (Linear Congruential Generator),
-/// replicando el comportamiento del cliente Python funcional.
 class SocketLcgService {
   // ---------------------------------------------------------------------
   // Parámetros del LCG. DEBEN coincidir EXACTAMENTE con el servidor.
@@ -13,10 +10,10 @@ class SocketLcgService {
   //   x = (x * A + B) % BASE
   //   byte_cifrado = byte_plano XOR (x % 256)
   // ---------------------------------------------------------------------
-  static const int _initialX = 123456;
-  static const int _a = 20011;
+  static const int _initialX = 256;
+  static const int _a = 1103515245;
   static const int _b = 12345;
-  static const int _base = 65536;
+  static const int _base = 42; // seed
 
   /// Aplica el flujo LCG + XOR sobre [source]. Como el XOR es simétrico,
   /// esta misma función sirve para cifrar y, si algún día el servidor
