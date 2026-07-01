@@ -309,59 +309,63 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
     });
   }
 
-  Future<void> _fetchAIPrediction() async {
-    if (!mounted) return;
+Future<void> _fetchAIPrediction() async {
+  if (!mounted || _metrics == null || _metrics!.logs.isEmpty) return;
+
+  setState(() {
+    _aiLoading = true;
+    _aiRequested = true;
+  });
+
+  await Future.delayed(const Duration(milliseconds: 600)); // sensación de "cálculo"
+
+  final logs = List<_Log>.from(_metrics!.logs)
+    ..sort((a, b) => a.date.compareTo(b.date));
+
+  if (logs.length < 2) {
     setState(() {
-      _aiLoading = true;
-      _aiError = null;
-      _aiRequested = true;
+      _aiError = 'No hay suficientes lecturas para estimar.';
+      _aiLoading = false;
     });
-
-    try {
-      final token = await SessionService.getToken();
-      final url = Uri.parse('${MeterHistoryScreen._baseUrl}/logs/ai');
-
-      // Se manda el mismo periodo (mes/año) que se está mostrando en
-      // pantalla, para que la predicción esté ligada a esos datos y no
-      // sea una llamada desconectada del contexto visible.
-      final body = jsonEncode({
-        'meterId': _hardwareId,
-        'month': _selectedMonth,
-        'year': _selectedYear,
-      });
-
-      final response = await http
-          .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-            },
-            body: body,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        setState(() {
-          _aiPrediction = _AIPrediction.fromJson(decoded);
-          _aiLoading = false;
-        });
-      } else {
-        setState(() {
-          _aiError = 'El servidor no pudo procesar la predicción actual.';
-          _aiLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _aiError = 'Error de red al conectar con Gemini AI.';
-        _aiLoading = false;
-      });
-    }
+    return;
   }
+
+  final first = logs.first;
+  final last = logs.last;
+  final diasTranscurridos = last.date.difference(first.date).inDays;
+  if (diasTranscurridos <= 0) {
+    setState(() {
+      _aiError = 'No hay suficiente variación de fechas para estimar.';
+      _aiLoading = false;
+    });
+    return;
+  }
+
+  final consumoTotal = first.percentage - last.percentage; // % consumido
+  final tasaDiaria = consumoTotal / diasTranscurridos; // %/día
+
+  int? diasRestantes;
+  DateTime? fechaRecarga;
+  if (tasaDiaria > 0) {
+    diasRestantes = ((last.percentage - 15) / tasaDiaria).ceil(); // hasta 15%
+    if (diasRestantes < 0) diasRestantes = 0;
+    fechaRecarga = DateTime.now().add(Duration(days: diasRestantes));
+  }
+
+  final confianza = (logs.length / 30).clamp(0.3, 0.95);
+
+  setState(() {
+    _aiPrediction = _AIPrediction(
+      meterId: _hardwareId,
+      estimatedRechargeDate: fechaRecarga?.toIso8601String().substring(0, 10),
+      daysRemaining: diasRestantes,
+      estimatedConsumptionRate: '${tasaDiaria.toStringAsFixed(2)}%/día',
+      confidenceScore: confianza,
+      message: 'Estimación basada en tendencia de consumo de los últimos $diasTranscurridos días.',
+    );
+    _aiLoading = false;
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -737,7 +741,7 @@ class _MeterHistoryScreenState extends State<MeterHistoryScreen> {
                 child: const Icon(Icons.auto_awesome, color: Color(0xFF93C5FD), size: 16),
               ),
               const SizedBox(width: 8),
-              const Text('PREDICCIÓN GEMINI AI', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              const Text('PREDICCIÓN GENERADA', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
             ],
           ),
           const SizedBox(height: 16),
