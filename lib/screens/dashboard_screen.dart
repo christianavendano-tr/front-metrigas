@@ -6,7 +6,7 @@ import '../services/storage_service.dart';
 import '../services/session_service.dart';
 import '../services/meter_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Para controlar las banderas de sincronización
-import '../services/local_meter_socket_service.dart'; // Tu servicio de socket TCP con cifrado LCG
+import '../services/local_meter_websocket_service.dart'; // Tu servicio de socket TCP con cifrado LCG
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -111,7 +111,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         try {
           // 4. Invocamos tu servicio existente. Mandamos el JSON que espera el CASE 2 del Firmware.
           // Usamos 'metrigas.local' gracias al mDNS que levanta la ESP32.
-          final Map<String, dynamic> respuesta = await LocalMeterSocketService.sendCommand(
+          final Map<String, dynamic> respuesta = await LocalMeterWebSocketService.sendCommand(
             hostname: 'metrigas.local',
             commandJson: {
               "action": "set_premium"
