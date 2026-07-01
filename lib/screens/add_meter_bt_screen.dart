@@ -1,13 +1,12 @@
 // lib/screens/add_meter_bt_screen.dart
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io'; // <-- REQUERIDO: Para poder usar Platform.isAndroid de forma segura
+import 'dart:io'; // REQUERIDO: Para poder usar Platform.isAndroid de forma segura
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart'; // Manejo nativo de permisos
 import '../services/meter_manager.dart'; // Sincronizado con tu manejador real
-import 'dart:math'; // 👈 REQUERIDO: Para el generador de números aleatorios del UUID
-import '../services/local_meter_socket_service.dart'; // 👈 Tu servicio con cifrado LCG
+import '../services/local_meter_websocket_service.dart'; // Tu servicio de comunicación WebSocket
 
 class AddMeterBtScreen extends StatefulWidget {
   const AddMeterBtScreen({super.key});
@@ -149,10 +148,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
       await FlutterBluePlus.stopScan();
 
       // 1. Nos conectamos al dispositivo periférico
-      await device.connect(
-        timeout: const Duration(seconds: 5),
-        //license: (License as dynamic).none ?? (License as dynamic).values.first,
-      );
+      await device.connect(timeout: const Duration(seconds: 5));
       _targetDevice = device;
 
       // 2. SOLUCIÓN IMPLEMENTADA: Forzamos la expansión del MTU a 255 bytes
@@ -190,7 +186,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
   }
 
   // ===========================================================================
-  // TRANSMIÓN DE CREDENCIALES WI-FI VÍA BLE (FASE 3)
+  // TRANSMISIÓN DE CREDENCIALES WI-FI VÍA BLE (FASE 3)
   // ===========================================================================
   Future<void> _enviarCredencialesWifi() async {
     if (_wifiCharacteristic == null) {
@@ -223,28 +219,28 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
   }
 
   // ===========================================================================
-  // PERSISTENCIA COMPATIBLE CON METER_MANAGER (FASE 4)
+  // FASE FINAL: REGISTRO LOCAL Y BAUTIZO VÍA WEBSOCKET SIMULTÁNEO
   // ===========================================================================
   Future<void> _finalizarConfiguracionMedidor(String? userEmail) async {
     final String alias = _aliasController.text.trim();
     final String capacidad = _capacityController.text.trim();
+    final String dispositivoId =
+        _targetDevice?.remoteId.toString() ?? "ESP32-DEV-MODE";
 
-    // 1. TIEMPO DE ESPERA / BLOQUEO DE UI
-    // Mostramos un diálogo no-esquivable para que el usuario no presione doble clic 
-    // y dar tiempo holgado a la transmisión Wi-Fi y escritura en Flash del ESP32.
+    // 1. Mostrar diálogo bloqueante de carga (Utilizando 'content' de forma correcta)
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
+      builder: (context) => AlertDialog(
         content: Padding(
-          padding: EdgeInsets.symmetric(vertical: 16.0),
+          padding: const EdgeInsets.symmetric(vertical: 16.0),
           child: Row(
             children: [
               CircularProgressIndicator(color: lightBlue),
-              SizedBox(width: 24),
-              Expanded(
+              const SizedBox(width: 24),
+              const Expanded(
                 child: Text(
-                  "Bautizando medidor vía Wi-Fi...\nPor favor, mantente cerca del módem.",
+                  "Bautizando medidor vía Wi-Fi...\nPor favor, asegúrate de estar en la misma red.",
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ),
@@ -255,78 +251,50 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
     );
 
     try {
-      // 2. GENERACIÓN DEL UUID EN EL MOMENTO DEL CLICK
-      final String nuevoUuid = _generarUUIDv4();
-
-      // 3. ENVÍO VÍA SOCKET TCP (CON CIFRADO LCG INTERNO)
-      // Como el hardware se acaba de conectar al Wi-Fi, responde al mDNS base 'metrigas.local'
-      final Map<String, dynamic> respuesta = await LocalMeterSocketService.sendCommand(
+      // 2. Enviar el comando de asignación de nombre por WebSocket al hardware local
+      // Nota: Reemplazar 'metrigas.local' por la IP o DNS mDNS real de tu firmware
+      await LocalMeterWebSocketService.sendCommand(
         hostname: 'metrigas.local',
         commandJson: {
-          "action": ["set_name", alias, nuevoUuid] // Payload exacto esperado por tu Firmware
+          "action": ["set_name", alias, dispositivoId]
         },
-        timeout: const Duration(seconds: 8), // Tiempo suficiente para el save_config_atomic
+        timeout: const Duration(seconds: 8),
       );
 
-      // 4. VALIDACIÓN DE RESPUESTA DEL FIRMWARE
-      final statusResponse = respuesta['status'];
-      if (statusResponse is List && statusResponse.contains('mDNS_mutated')) {
-        
-        // 5. REGISTRO LOCAL DE LA APP SÓLO SI EL HARDWARE RESPONDIÓ EXITOSAMENTE
-        final Map<String, dynamic> nuevoMedidor = {
-          "id": nuevoUuid, // 🔥 IMPORTANTE: Guardamos el UUID generado, YA NO la dirección MAC del BLE
-          "metername": alias,
-          "capacity": capacidad,
-          "ownerId": userEmail ?? "00000000-0000-0000-0000-000000000000"
-        };
+      // Si la comunicación WebSocket es exitosa, removemos el diálogo de carga
+      if (mounted) Navigator.pop(context);
 
-        // Guardamos en caché local utilizando tu MeterManager existente
-        await MeterManager.guardarMedidorLocal(nuevoMedidor);
+      // 3. Persistencia en caché local compatible con la estructura de Postgres mediante MeterManager
+      final Map<String, dynamic> nuevoMedidor = {
+        "id": dispositivoId,
+        "metername": alias,
+        "capacity": capacidad,
+        "ownerId": userEmail ?? "00000000-0000-0000-0000-000000000000"
+      };
 
-        // Cerramos cualquier rastro del canal de radio Bluetooth de forma limpia
-        await _targetDevice?.disconnect();
-        _targetDevice = null;
+      await MeterManager.guardarMedidorLocal(nuevoMedidor);
 
-        // Quitamos el diálogo de carga
-        if (mounted) Navigator.pop(context);
+      // Desconexión e inicio limpio del periférico de radio Bluetooth
+      await _targetDevice?.disconnect();
+      _targetDevice = null;
 
-        _showSnackBar("¡Medidor registrado y enlazado con éxito!", Colors.green);
+      _showSnackBar("¡Enlace verificado y medidor registrado con éxito!", Colors.green);
 
-        // Redirección limpia al Dashboard principal
-        if (mounted) {
-          Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
-        }
-      } else {
-        throw Exception("El firmware respondió pero no confirmó la inicialización.");
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/dashboard', (route) => false);
       }
     } catch (e) {
-      // Si el socket falla (por ejemplo, si el medidor tarda en agarrar IP o el celular se cambió de red)
-      if (mounted) Navigator.pop(context); // Quitamos el loading dialog
+      // Si la verificación Wi-Fi / WebSocket local falla, cerramos el diálogo y alertamos
+      if (mounted) Navigator.pop(context);
       
-      debugPrint("❌ [Error en Bautizo Wi-Fi]: $e");
+      debugPrint("❌ [Error en Bautizo local por WebSocket]: $e");
+      
+      // Muestra el error técnico real en el SnackBar para saber exactamente qué falló
       _showSnackBar(
-        "No se pudo verificar el enlace Wi-Fi con el hardware. Revisa que tu celular comparta la misma red de 2.4GHz.",
-        Colors.red,
-      );
+          "Fallo de verificación: ${e.toString().replaceAll("Exception:", "")}",
+          Colors.red);
     }
-  }
-
-  /// Generador nativo de UUID v4 idéntico al esquema de base de datos
-  String _generarUUIDv4() {
-    final random = Random();
-    const hexDigits = '0123456789abcdef';
-    
-    String randomHex(int length) {
-      return List.generate(length, (index) => hexDigits[random.nextInt(16)]).join();
-    }
-
-    final s1 = randomHex(8);
-    final s2 = randomHex(4);
-    final s3 = '4${randomHex(3)}'; // Versión 4 especificada
-    final s4 = ['8', '9', 'a', 'b'][random.nextInt(4)] + randomHex(3);
-    final s5 = randomHex(12);
-
-    return '$s1-$s2-$s3-$s4-$s5';
   }
 
   void _showSnackBar(String message, Color color) {
@@ -442,7 +410,6 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
           ),
         ],
       ),
-      // BOTÓN DE DESARROLLADOR PRESERVADO INTACTO
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.orange,
         icon: const Icon(Icons.developer_mode, color: Colors.white),
@@ -730,10 +697,12 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen>
                   fillColor: Colors.white,
                   filled: true),
               validator: (v) {
-                if (v == null || v.trim().isEmpty)
+                if (v == null || v.trim().isEmpty) {
                   return 'Especifica el litraje';
-                if (int.tryParse(v.trim()) == null)
+                }
+                if (int.tryParse(v.trim()) == null) {
                   return 'Ingresa un número entero válido';
+                }
                 return null;
               },
             ),
