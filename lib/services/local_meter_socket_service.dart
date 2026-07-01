@@ -27,14 +27,17 @@ class LocalMeterSocketService {
   /// FUNCIÓN REUTILIZABLE CENTRAL: Envía un mapa JSON cifrado a un Host específico
   /// por TCP y retorna la respuesta decodificada del medidor.
   static Future<Map<String, dynamic>> sendCommand({
-    required String hostname,
+    required String hostname, //quitar espacio y guiones bajos, convertir a -
     required Map<String, dynamic> commandJson,
     Duration timeout = const Duration(seconds: 7),
   }) async {
     Socket? socket;
     try {
       // 1. Limpieza del hostname (remover http:// o .local si se pasa el host crudo)
-      final String targetHost = hostname.replaceAll('http://', '');
+      final String targetHost =
+          hostname.replaceAll(' ', '-').replaceAll('_', '-');
+
+      // agregar un .local al final y ws:// (tal vez)
 
       // 2. Apertura del Socket TCP Nativo
       socket = await Socket.connect(targetHost, _port, timeout: timeout);
@@ -50,7 +53,7 @@ class LocalMeterSocketService {
 
       // 5. Captura y espera de la respuesta del ESP32 en el flujo de entrada
       final Uint8List responseBuffer = await socket.first.timeout(timeout);
-      
+
       // 6. Descifrado LCG de la respuesta binaria recibida
       final Uint8List decryptedBytes = _lcgTransform(responseBuffer);
       final String jsonResponseStr = utf8.decode(decryptedBytes);

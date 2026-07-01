@@ -14,7 +14,8 @@ class AddMeterBtScreen extends StatefulWidget {
   State<AddMeterBtScreen> createState() => _AddMeterBtScreenState();
 }
 
-class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerProviderStateMixin {
+class _AddMeterBtScreenState extends State<AddMeterBtScreen>
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   int _currentStep = 0;
 
@@ -25,7 +26,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
   late AnimationController _animationController;
 
   // Paleta de colores idéntica a tus otras pantallas
-  static const Color primaryBlue = Color(0xFF0052CC); 
+  static const Color primaryBlue = Color(0xFF0052CC);
   static const Color lightBlue = Color(0xFF0088FF);
 
   // Controladores de estado de conectividad Bluetooth
@@ -36,7 +37,7 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
 
   // Variables de control de Hardware BLE
   BluetoothDevice? _targetDevice;
-  BluetoothCharacteristic? _wifiCharacteristic; 
+  BluetoothCharacteristic? _wifiCharacteristic;
   StreamSubscription<List<ScanResult>>? _scanSubscription;
 
   // Controladores de texto para los formularios de las Fases 3 y 4
@@ -88,17 +89,20 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
     Map<Permission, PermissionStatus> statuses = await [
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
-      Permission.location, 
+      Permission.location,
     ].request();
 
     if (statuses[Permission.bluetoothScan]?.isDenied == true ||
         statuses[Permission.bluetoothConnect]?.isDenied == true) {
-      _showSnackBar("Se requieren permisos de Bluetooth para buscar el medidor.", Colors.red);
+      _showSnackBar(
+          "Se requieren permisos de Bluetooth para buscar el medidor.",
+          Colors.red);
       return;
     }
 
     if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
-      _showSnackBar("Por favor, enciende el Bluetooth de tu dispositivo", Colors.orange);
+      _showSnackBar(
+          "Por favor, enciende el Bluetooth de tu dispositivo", Colors.orange);
       return;
     }
 
@@ -117,9 +121,9 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
           _scanResults = results.where((r) {
             final name = r.device.advName.trim();
             final platformName = r.device.platformName.trim();
-            return name.toLowerCase().contains('metrigas') || 
-                   platformName.toLowerCase().contains('metrigas') ||
-                   name.isNotEmpty;
+            return name.toLowerCase().contains('metrigas') ||
+                platformName.toLowerCase().contains('metrigas') ||
+                name.isNotEmpty;
           }).toList();
         });
       });
@@ -138,26 +142,27 @@ class _AddMeterBtScreenState extends State<AddMeterBtScreen> with SingleTickerPr
   // ===========================================================================
   Future<void> _connectToDevice(BluetoothDevice device) async {
     setState(() => _isConnecting = true);
-    
+
     try {
       await FlutterBluePlus.stopScan();
-      
+
       // 1. Nos conectamos al dispositivo periférico
-await device.connect(
-  timeout: const Duration(seconds: 5),
-  license: (License as dynamic).none ?? (License as dynamic).values.first,
-);
+      await device.connect(
+        timeout: const Duration(seconds: 5),
+        //license: (License as dynamic).none ?? (License as dynamic).values.first,
+      );
       _targetDevice = device;
 
       // 2. SOLUCIÓN IMPLEMENTADA: Forzamos la expansión del MTU a 255 bytes
       if (Platform.isAndroid) {
         try {
           await device.requestMtu(255);
-          // Un breve respiro de 300 milisegundos para que el chip de radio de Android 
+          // Un breve respiro de 300 milisegundos para que el chip de radio de Android
           // y el del ESP32 terminen de acordar el nuevo tamaño de búfer de transmisión.
           await Future.delayed(const Duration(milliseconds: 300));
         } catch (mtuError) {
-          debugPrint("Aviso de negociación MTU (Continuando por defecto): $mtuError");
+          debugPrint(
+              "Aviso de negociación MTU (Continuando por defecto): $mtuError");
         }
       }
 
@@ -172,9 +177,9 @@ await device.connect(
         }
       }
 
-      _showSnackBar("¡Medidor enlazado y canal de datos optimizado!", Colors.green);
+      _showSnackBar(
+          "¡Medidor enlazado y canal de datos optimizado!", Colors.green);
       _goToStep(2); // Avanza automáticamente a la Fase 3 (Índice 2)
-
     } catch (e) {
       _showSnackBar("Fallo en el enlace físico. Reintenta.", Colors.red);
     } finally {
@@ -187,7 +192,8 @@ await device.connect(
   // ===========================================================================
   Future<void> _enviarCredencialesWifi() async {
     if (_wifiCharacteristic == null) {
-      _showSnackBar("Canal de datos BLE no disponible. Reconecta el medidor.", Colors.red);
+      _showSnackBar("Canal de datos BLE no disponible. Reconecta el medidor.",
+          Colors.red);
       return;
     }
 
@@ -198,16 +204,15 @@ await device.connect(
         "ssid": _ssidController.text.trim(),
         "pwd": _passwordController.text
       };
-      
+
       final String jsonStr = jsonEncode(dataMap);
       final List<int> bytes = utf8.encode(jsonStr);
 
       // Al haber configurado el MTU en 255 en el paso anterior, los bytes se van completos
       await _wifiCharacteristic!.write(bytes, withoutResponse: false);
-      
+
       _showSnackBar("Configuración Wi-Fi enviada al medidor", Colors.green);
       _goToStep(3); // Avanza automáticamente a la Fase 4 (Índice 3)
-
     } catch (e) {
       _showSnackBar("Error al transmitir datos por Bluetooth: $e", Colors.red);
     } finally {
@@ -222,13 +227,14 @@ await device.connect(
     try {
       final String alias = _aliasController.text.trim();
       final String capacidad = _capacityController.text.trim();
-      final String dispositivoId = _targetDevice?.remoteId.toString() ?? "ESP32-DEV-MODE";
+      final String dispositivoId =
+          _targetDevice?.remoteId.toString() ?? "ESP32-DEV-MODE";
 
       final Map<String, dynamic> nuevoMedidor = {
         "id": dispositivoId,
-        "metername": alias, 
-        "capacity": capacidad, 
-        "ownerId": userEmail ?? "00000000-0000-0000-0000-000000000000" 
+        "metername": alias,
+        "capacity": capacidad,
+        "ownerId": userEmail ?? "00000000-0000-0000-0000-000000000000"
       };
 
       await MeterManager.guardarMedidorLocal(nuevoMedidor);
@@ -236,10 +242,12 @@ await device.connect(
       await _targetDevice?.disconnect();
       _targetDevice = null;
 
-      _showSnackBar("¡Medidor registrado en tu almacenamiento local!", Colors.green);
-      
+      _showSnackBar(
+          "¡Medidor registrado en tu almacenamiento local!", Colors.green);
+
       if (mounted) {
-        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+        Navigator.pushNamedAndRemoveUntil(
+            context, '/dashboard', (route) => false);
       }
     } catch (e) {
       _showSnackBar("Error al salvar los cambios en caché: $e", Colors.red);
@@ -248,7 +256,10 @@ await device.connect(
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color, duration: const Duration(seconds: 3)),
+      SnackBar(
+          content: Text(message),
+          backgroundColor: color,
+          duration: const Duration(seconds: 3)),
     );
   }
 
@@ -267,7 +278,8 @@ await device.connect(
             child: Container(
               width: 150,
               height: 150,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: lightBlue),
+              decoration:
+                  const BoxDecoration(shape: BoxShape.circle, color: lightBlue),
             ),
           ),
         );
@@ -285,7 +297,8 @@ await device.connect(
         child: Text(
           'Metri GAS',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -317,10 +330,13 @@ await device.connect(
             child: Text(
               '$stepTitle (${_currentStep + 1}/4)',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15),
             ),
           ),
-          const SizedBox(width: 48), 
+          const SizedBox(width: 48),
         ],
       ),
     );
@@ -340,7 +356,7 @@ await device.connect(
           Expanded(
             child: PageView(
               controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(), 
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _fase1Instrucciones(),
                 _fase2ListadoDispositivos(),
@@ -355,7 +371,8 @@ await device.connect(
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.orange,
         icon: const Icon(Icons.developer_mode, color: Colors.white),
-        label: const Text('Dev: Forzar Paso', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text('Dev: Forzar Paso',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         onPressed: () {
           if (_currentStep < 3) {
             _goToStep(_currentStep + 1);
@@ -397,7 +414,11 @@ await device.connect(
                         shape: BoxShape.circle,
                         color: Colors.white,
                         boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 12, spreadRadius: 4, offset: const Offset(0, 3)),
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 12,
+                              spreadRadius: 4,
+                              offset: const Offset(0, 3)),
                         ],
                       ),
                       child: Center(
@@ -406,9 +427,13 @@ await device.connect(
                           height: 115,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: [Color(0xFF66B2FF), lightBlue], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                            gradient: LinearGradient(
+                                colors: [Color(0xFF66B2FF), lightBlue],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter),
                           ),
-                          child: const Icon(Icons.bluetooth, size: 70, color: Colors.white),
+                          child: const Icon(Icons.bluetooth,
+                              size: 70, color: Colors.white),
                         ),
                       ),
                     ),
@@ -421,12 +446,20 @@ await device.connect(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 2),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 2),
                 onPressed: () {
                   _goToStep(1);
                   _startBleScan();
                 },
-                child: const Text('Iniciar Escaneo', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text('Iniciar Escaneo',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -440,7 +473,9 @@ await device.connect(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         children: [
-          if (_isScanning) const LinearProgressIndicator(color: lightBlue, backgroundColor: Color(0xFFD0D0D0)),
+          if (_isScanning)
+            const LinearProgressIndicator(
+                color: lightBlue, backgroundColor: Color(0xFFD0D0D0)),
           const SizedBox(height: 16),
           Expanded(
             child: _scanResults.isEmpty
@@ -450,9 +485,16 @@ await device.connect(
                       children: [
                         Icon(Icons.radar, size: 64, color: Colors.grey[400]),
                         const SizedBox(height: 16),
-                        Text(_isScanning ? 'Buscando señales Metrigas...' : 'No se encontró hardware activo', style: const TextStyle(color: Colors.grey)),
+                        Text(
+                            _isScanning
+                                ? 'Buscando señales Metrigas...'
+                                : 'No se encontró hardware activo',
+                            style: const TextStyle(color: Colors.grey)),
                         if (!_isScanning)
-                          TextButton.icon(onPressed: _startBleScan, icon: const Icon(Icons.refresh), label: const Text('Volver a buscar'))
+                          TextButton.icon(
+                              onPressed: _startBleScan,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Volver a buscar'))
                       ],
                     ),
                   )
@@ -460,19 +502,33 @@ await device.connect(
                     itemCount: _scanResults.length,
                     itemBuilder: (context, index) {
                       final result = _scanResults[index];
-                      final name = result.device.advName.isNotEmpty ? result.device.advName : "Medidor Inteligente";
+                      final name = result.device.advName.isNotEmpty
+                          ? result.device.advName
+                          : "Medidor Inteligente";
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         elevation: 1,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                         child: ListTile(
-                          leading: const CircleAvatar(backgroundColor: Color(0xFFE6F0FF), child: Icon(Icons.router, color: primaryBlue)),
-                          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('ID: ${result.device.remoteId} | Señal: ${result.rssi} dBm'),
+                          leading: const CircleAvatar(
+                              backgroundColor: Color(0xFFE6F0FF),
+                              child: Icon(Icons.router, color: primaryBlue)),
+                          title: Text(name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(
+                              'ID: ${result.device.remoteId} | Señal: ${result.rssi} dBm'),
                           trailing: _isConnecting
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.link, color: primaryBlue),
-                          onTap: _isConnecting ? null : () => _connectToDevice(result.device),
+                          onTap: _isConnecting
+                              ? null
+                              : () => _connectToDevice(result.device),
                         ),
                       );
                     },
@@ -491,36 +547,65 @@ await device.connect(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Aprovisionamiento de Red', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryBlue)),
+            const Text('Aprovisionamiento de Red',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: primaryBlue)),
             const SizedBox(height: 6),
-            const Text('Ingresa la red del hogar para que el hardware se conecte de forma independiente.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            const Text(
+                'Ingresa la red del hogar para que el hardware se conecte de forma independiente.',
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
             const SizedBox(height: 24),
             TextFormField(
               controller: _ssidController,
-              decoration: const InputDecoration(labelText: 'Nombre de red (SSID)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.wifi), fillColor: Colors.white, filled: true),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'El SSID es obligatorio' : null,
+              decoration: const InputDecoration(
+                  labelText: 'Nombre de red (SSID)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.wifi),
+                  fillColor: Colors.white,
+                  filled: true),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'El SSID es obligatorio'
+                  : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Contraseña', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock), fillColor: Colors.white, filled: true),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'La contraseña es obligatoria' : null,
+              decoration: const InputDecoration(
+                  labelText: 'Contraseña',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                  fillColor: Colors.white,
+                  filled: true),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'La contraseña es obligatoria'
+                  : null,
             ),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                onPressed: _isSendingWifi ? null : () {
-                  if (_wifiFormKey.currentState!.validate()) {
-                    _enviarCredencialesWifi();
-                  }
-                },
-                child: _isSendingWifi 
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8))),
+                onPressed: _isSendingWifi
+                    ? null
+                    : () {
+                        if (_wifiFormKey.currentState!.validate()) {
+                          _enviarCredencialesWifi();
+                        }
+                      },
+                child: _isSendingWifi
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Transmitir Parámetros', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    : const Text('Transmitir Parámetros',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
               ),
             )
           ],
@@ -537,23 +622,43 @@ await device.connect(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Dimensiones Comerciales', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryBlue)),
+            const Text('Dimensiones Comerciales',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: primaryBlue)),
             const SizedBox(height: 6),
-            const Text('Asigna valores precisos para realizar cálculos volumétricos perfectos.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            const Text(
+                'Asigna valores precisos para realizar cálculos volumétricos perfectos.',
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
             const SizedBox(height: 24),
             TextFormField(
               controller: _aliasController,
-              decoration: const InputDecoration(labelText: 'Nombre identificador (ej: Tanque Principal)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.label), fillColor: Colors.white, filled: true),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Asigna un nombre de medidor' : null,
+              decoration: const InputDecoration(
+                  labelText: 'Nombre identificador (ej: Tanque Principal)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.label),
+                  fillColor: Colors.white,
+                  filled: true),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Asigna un nombre de medidor'
+                  : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _capacityController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Capacidad nominal (Litros)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.equalizer), fillColor: Colors.white, filled: true),
+              decoration: const InputDecoration(
+                  labelText: 'Capacidad nominal (Litros)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.equalizer),
+                  fillColor: Colors.white,
+                  filled: true),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Especifica el litraje';
-                if (int.tryParse(v.trim()) == null) return 'Ingresa un número entero válido';
+                if (v == null || v.trim().isEmpty)
+                  return 'Especifica el litraje';
+                if (int.tryParse(v.trim()) == null)
+                  return 'Ingresa un número entero válido';
                 return null;
               },
             ),
@@ -562,13 +667,20 @@ await device.connect(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8))),
                 onPressed: () {
                   if (_tankFormKey.currentState!.validate()) {
                     _finalizarConfiguracionMedidor(userEmail);
                   }
                 },
-                child: const Text('Completar Enlace con Éxito', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                child: const Text('Completar Enlace con Éxito',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16)),
               ),
             )
           ],

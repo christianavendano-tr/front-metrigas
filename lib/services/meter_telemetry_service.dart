@@ -45,7 +45,7 @@ class MeterTelemetryService {
   // mDNS local
   // ─────────────────────────────────────────────────────────────────────────
   Future<TelemetryReading?> _fetchFromLocalMdns(String hardwareId) async {
-    final url = Uri.parse('http://metrigas-$hardwareId.local/api/status');
+    final url = Uri.parse('http://metrigas-$hardwareId.local');
     final response = await http.get(url).timeout(_localTimeout);
 
     if (response.statusCode != 200) {
