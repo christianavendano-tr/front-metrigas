@@ -88,7 +88,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Future<void> _verificarYSincronizarPremiumHardware() async {
     // 1. Verificamos el estado global del usuario usando tu ValueNotifier nativo
     final estadoUsuario = StorageService.userStateNotifier.value;
-    
+
     // Si el usuario NO es premium activo, salimos de inmediato sin molestar al hardware
     if (estadoUsuario != UserState.premiumActive) return;
 
@@ -106,34 +106,37 @@ class _DashboardScreenState extends State<DashboardScreen>
       bool yaSincronizado = prefs.getBool(cacheKey) ?? false;
 
       if (!yaSincronizado) {
-        debugPrint("🔄 [Premium Sync] Medidor $idMedidor requiere actualización en hardware. Intentando conexión TCP...");
+        debugPrint(
+            "🔄 [Premium Sync] Medidor $idMedidor requiere actualización en hardware. Intentando conexión TCP...");
 
         try {
           // 4. Invocamos tu servicio existente. Mandamos el JSON que espera el CASE 2 del Firmware.
           // Usamos 'metrigas.local' gracias al mDNS que levanta la ESP32.
-          final Map<String, dynamic> respuesta = await LocalMeterSocketService.sendCommand(
+          final Map<String, dynamic> respuesta =
+              await LocalMeterSocketService.sendCommand(
             hostname: 'metrigas.local',
-            commandJson: {
-              "action": "set_premium"
-            },
-            timeout: const Duration(seconds: 4), // Timeout prudente para no congelar hilos
+            commandJson: {"action": "set_premium"},
+            timeout: const Duration(
+                seconds: 4), // Timeout prudente para no congelar hilos
           );
 
           // 5. Validamos la respuesta exacta que genera tu firmware: {"status": ["ok", "premium_flag_true"]}
           final statusResponse = respuesta['status'];
-          if (statusResponse is List && statusResponse.contains('premium_flag_true')) {
-            
+          if (statusResponse is List &&
+              statusResponse.contains('premium_flag_true')) {
             // Sincronización exitosa: Guardamos el flag en el teléfono para no volver a spamear a la ESP32
             await prefs.setBool(cacheKey, true);
-            debugPrint("🚀 [Premium Sync] ¡Hardware $idMedidor actualizado y guardado atómicamente en Flash!");
-            
+            debugPrint(
+                "🚀 [Premium Sync] ¡Hardware $idMedidor actualizado y guardado atómicamente en Flash!");
+
             // Opcional: Detener el bucle si solo manejas un medidor a la vez, o dejar que continúe con los demás
-            break; 
+            break;
           }
         } catch (e) {
-          // Tu comando sendCommand lanza una Exception si falla la conexión TCP. 
+          // Tu comando sendCommand lanza una Exception si falla la conexión TCP.
           // Al atraparla aquí con un try-catch, evitamos crasheos si el usuario no está en su casa.
-          debugPrint("⚠️ [Premium Sync] No se pudo enviar el comando TCP al hardware (posiblemente fuera de rango Wi-Fi): $e");
+          debugPrint(
+              "⚠️ [Premium Sync] No se pudo enviar el comando TCP al hardware (posiblemente fuera de rango Wi-Fi): $e");
         }
       }
     }
@@ -144,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     try {
       final token = SessionService.getToken();
-      final url = Uri.parse('http://localhost:3000/auth/profile');
+      final url = Uri.parse('${SessionService.getURL()}/auth/profile');
 
       final response = await http.get(
         url,
@@ -266,7 +269,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     try {
       final token = SessionService.getToken();
-      final url = Uri.parse('http://localhost:3000/auth/paymethods');
+      final url = Uri.parse('${SessionService.getURL()}/auth/paymethods');
 
       final response = await http.delete(
         url,
@@ -341,7 +344,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
-    final String? userEmail = args is String ? args : StorageService.userEmail;;
+    final String? userEmail = args is String ? args : StorageService.userEmail;
+    ;
 
     return Scaffold(
       appBar: AppBar(

@@ -21,7 +21,7 @@ enum TelemetrySource { localMdns, cloudFallback }
 class MeterTelemetryService {
   static const Duration _localTimeout = Duration(seconds: 2);
   static const Duration _cloudTimeout = Duration(seconds: 6);
-  static const String _cloudBaseUrl = 'http://localhost:3000';
+  static final String _cloudBaseUrl = SessionService.getURL();
 
   Future<TelemetryReading?> fetchLatestReading(String hardwareId) async {
     // 1. Intento mDNS local (falla silenciosamente si el usuario no está en casa)

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:front_metrigas/services/session_service.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/auth_card_scaffold.dart';
 
@@ -14,7 +15,8 @@ class NewPasswordScreen extends StatefulWidget {
 
 class _NewPasswordScreenState extends State<NewPasswordScreen> {
   final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _repeatPasswordController = TextEditingController();
+  final TextEditingController _repeatPasswordController =
+      TextEditingController();
   bool _isLoading = false;
   bool _hasMinLength = false;
   bool _hasUppercase = false;
@@ -59,7 +61,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
     }
 
     setState(() => _isLoading = true);
-    final url = Uri.parse('http://localhost:3000/auth/checkemailpwd');
+    final url = Uri.parse('${SessionService.getURL()}/auth/checkemailpwd');
 
     try {
       final response = await http.post(
@@ -84,14 +86,17 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
         String msg = 'Código incorrecto o expirado. Solicita un nuevo código.';
         try {
           final data = jsonDecode(response.body);
-          if (data is Map && data['message'] != null) msg = data['message'].toString();
+          if (data is Map && data['message'] != null)
+            msg = data['message'].toString();
         } catch (_) {}
         _showErrorDialog(msg);
       } else {
-        _showErrorDialog('Error en el servidor. Código: ${response.statusCode}');
+        _showErrorDialog(
+            'Error en el servidor. Código: ${response.statusCode}');
       }
     } catch (_) {
-      _showErrorDialog('No se pudo conectar al servidor. Verifica tu red y el backend.');
+      _showErrorDialog(
+          'No se pudo conectar al servidor. Verifica tu red y el backend.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -136,7 +141,8 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.arrow_back_ios, size: 14, color: AuthCardScaffold.primaryBlue),
+                  Icon(Icons.arrow_back_ios,
+                      size: 14, color: AuthCardScaffold.primaryBlue),
                   SizedBox(width: 4),
                   Text(
                     'Volver',
@@ -170,25 +176,29 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          const Text('Nueva contraseña', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text('Nueva contraseña',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 6),
           TextField(
             controller: _newPasswordController,
             obscureText: true,
             decoration: InputDecoration(
               hintText: '**********',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
           const SizedBox(height: 14),
-          const Text('Repita la nueva contraseña', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text('Repita la nueva contraseña',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 6),
           TextField(
             controller: _repeatPasswordController,
             obscureText: true,
             decoration: InputDecoration(
               hintText: '**********',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
           const SizedBox(height: 16),
@@ -208,14 +218,16 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: _isLoading ? null : _handleConfirm,
               child: _isLoading
                   ? const SizedBox(
                       height: 22,
                       width: 22,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
                     )
                   : const Text('Confirmar', style: TextStyle(fontSize: 16)),
             ),

@@ -6,6 +6,10 @@ class SessionService {
   static const String _tokenKey = 'jwt_access_token';
   static String? _accessToken;
 
+  static String getURL() {
+    return 'http://localhost:3000';
+  }
+
   /// Gets token from memory when starting app
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();

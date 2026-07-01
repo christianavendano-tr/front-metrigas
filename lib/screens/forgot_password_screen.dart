@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:front_metrigas/services/session_service.dart';
 import 'package:http/http.dart' as http;
 import '../widgets/auth_card_scaffold.dart';
 import 'verification_screen.dart';
-
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -24,7 +24,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
     final email = _emailController.text.trim();
     final url = Uri.parse(
-      'http://localhost:3000/auth/checkemailpwd/${Uri.encodeComponent(email)}',
+      '${SessionService.getURL()}/auth/checkemailpwd/${Uri.encodeComponent(email)}',
     );
 
     try {
@@ -43,12 +43,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
         );
       } else if (response.statusCode == 404) {
-        _showErrorDialog('No encontramos una cuenta con ese correo electrónico.');
+        _showErrorDialog(
+            'No encontramos una cuenta con ese correo electrónico.');
       } else {
-        _showErrorDialog('Error en el servidor. Código: ${response.statusCode}');
+        _showErrorDialog(
+            'Error en el servidor. Código: ${response.statusCode}');
       }
     } catch (_) {
-      _showErrorDialog('No se pudo conectar al servidor. Verifica tu red y el backend.');
+      _showErrorDialog(
+          'No se pudo conectar al servidor. Verifica tu red y el backend.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -88,11 +91,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: GestureDetector(
-                onTap: () => Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false),
+                onTap: () => Navigator.pushNamedAndRemoveUntil(
+                    context, '/login', (route) => false),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.arrow_back_ios, size: 14, color: AuthCardScaffold.primaryBlue),
+                    Icon(Icons.arrow_back_ios,
+                        size: 14, color: AuthCardScaffold.primaryBlue),
                     SizedBox(width: 4),
                     Text(
                       'Volver',
@@ -131,7 +136,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             const SizedBox(height: 25),
             const Align(
               alignment: Alignment.centerLeft,
-              child: Text('Correo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              child: Text('Correo',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             ),
             const SizedBox(height: 8),
             TextFormField(
@@ -142,7 +148,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 border: OutlineInputBorder(),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) return 'El correo no puede estar vacío';
+                if (value == null || value.isEmpty)
+                  return 'El correo no puede estar vacío';
                 if (!value.contains('@')) return 'Ingresa un correo válido';
                 return null;
               },
@@ -155,12 +162,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   disabledBackgroundColor: Colors.grey,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: _isLoading ? null : _handleSendCode,
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Enviar enlace de recuperación', style: TextStyle(color: Colors.white, fontSize: 16)),
+                    : const Text('Enviar enlace de recuperación',
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ),
           ],

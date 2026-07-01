@@ -8,7 +8,7 @@ import 'session_service.dart';
 
 class MeterManager {
   static const String _localMetersKey = 'local_meters_cache';
-  static const String _baseUrl = 'http://localhost:3000';
+  static final String _baseUrl = SessionService.getURL();
 
   /// Generador nativo de UUID v4 para cumplir con las restricciones estrictas de Postgres
   static String _generarUUIDv4() {

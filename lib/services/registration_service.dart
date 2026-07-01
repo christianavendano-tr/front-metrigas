@@ -1,15 +1,17 @@
 import 'package:dio/dio.dart';
+import 'package:front_metrigas/services/session_service.dart';
 
 class RegistrationService {
-  static const String baseUrl = 'http://localhost:3000';
-  
+  static final String baseUrl = SessionService.getURL();
+
   static const String premiumPriceId = 'price_1QJ45zRFZd5tQ6sqTU3fSPET';
 
   static final Dio _dio = Dio(BaseOptions(
     baseUrl: baseUrl,
     connectTimeout: const Duration(seconds: 5),
     receiveTimeout: const Duration(seconds: 3),
-  ))..interceptors.add(LogInterceptor(
+  ))
+    ..interceptors.add(LogInterceptor(
       request: true,
       requestHeader: true,
       requestBody: true, // Para ver el JSON exacto en consola
@@ -26,7 +28,7 @@ class RegistrationService {
 
   static void setTemporaryEmail(String email) => _temporaryEmail = email;
   static void setTemporaryJwtToken(String token) => _temporaryJwtToken = token;
-  
+
   static void clearRegistrationState() {
     _temporaryEmail = null;
     _temporaryJwtToken = null;
@@ -63,20 +65,21 @@ class RegistrationService {
       },
     );
   }
-  
+
   /// 3. POST /auth/paymethods
   static Future<Response> createSubscription({
     required String email,
   }) async {
     return await _dio.post(
-      '/auth/paymethods', 
+      '/auth/paymethods',
       data: {
         'email': email,
       },
       options: Options(
         headers: {
           'Content-Type': 'application/json',
-          if (_temporaryJwtToken != null) 'Authorization': 'Bearer $_temporaryJwtToken',
+          if (_temporaryJwtToken != null)
+            'Authorization': 'Bearer $_temporaryJwtToken',
         },
       ),
     );

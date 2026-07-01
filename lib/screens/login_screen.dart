@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../widgets/wave_clipper.dart';
 import '../services/session_service.dart';
-import '../services/storage_service.dart'; 
-import '../services/meter_manager.dart'; 
+import '../services/storage_service.dart';
+import '../services/meter_manager.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,8 +24,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    final url = Uri.parse('http://localhost:3000/auth/login'); 
-    
+    final url = Uri.parse('${SessionService.getURL()}/auth/login');
+
     try {
       final response = await http.post(
         url,
@@ -50,16 +50,17 @@ class _LoginScreenState extends State<LoginScreen> {
         if (data['user'] != null) {
           nombreReal = data['user']['username'] ?? 'Usuario Premium';
           esSuscripcionActiva = data['user']['isActive'] ?? false;
-          serverUserId = data['user']['id']?.toString(); // <-- EXTRAEMOS EL UUID REAL
+          serverUserId =
+              data['user']['id']?.toString(); // <-- EXTRAEMOS EL UUID REAL
         }
-  
-        UserState estadoFinalUsuario = esSuscripcionActiva 
-            ? UserState.premiumActive 
+
+        UserState estadoFinalUsuario = esSuscripcionActiva
+            ? UserState.premiumActive
             : UserState.premiumInactive;
 
         // 2. Guardamos el estado del usuario e incluimos el 'email' para que persista al reiniciar
         await StorageService.setMockState(
-          estadoFinalUsuario, 
+          estadoFinalUsuario,
           name: nombreReal,
           email: _emailController.text.trim(),
         );
@@ -78,10 +79,10 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('¡Ingreso Exitoso!')),
           );
-          
+
           Navigator.pushNamedAndRemoveUntil(
-            context, 
-            '/dashboard', 
+            context,
+            '/dashboard',
             (route) => false,
             arguments: _emailController.text.trim(),
           );
@@ -89,10 +90,12 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (response.statusCode == 401) {
         _showErrorDialog('Correo o contraseña incorrectos.');
       } else {
-        _showErrorDialog('Error en el servidor. Código: ${response.statusCode}');
+        _showErrorDialog(
+            'Error en el servidor. Código: ${response.statusCode}');
       }
     } catch (e) {
-      _showErrorDialog('No se pudo conectar al servidor. Verifica tu red y el backend.');
+      _showErrorDialog(
+          'No se pudo conectar al servidor. Verifica tu red y el backend.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -119,7 +122,8 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           title: const Text(
             'Aviso de Privacidad y Términos y Condiciones',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
@@ -133,7 +137,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Text(
                     'METRIGAS\nAviso de Privacidad y Términos y Condiciones\nÚltima actualización: junio de 2026\n',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Colors.black),
                   ),
                   Text(
                     'Al crear una cuenta se dan por aceptados los siguientes terminos:\n\n'
@@ -151,7 +158,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Jurisdicción\n'
                     'Para cualquier controversia derivada del uso de nuestros servicios, el usuario se somete a la jurisdicción de los tribunales competentes en la ciudad de Santiago de Querétaro, Querétaro.\n\n'
                     'Al continuar usando la aplicación de Metrigas, usted confirma que ha leído y acepta el presente Aviso de Privacidad y Términos y Condiciones.',
-                    style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                    style: TextStyle(
+                        fontSize: 13, color: Colors.black87, height: 1.4),
                   ),
                 ],
               ),
@@ -160,10 +168,9 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Entendido', 
-                style: TextStyle(color: Color(0xFF0052CC), fontWeight: FontWeight.bold)
-              ),
+              child: const Text('Entendido',
+                  style: TextStyle(
+                      color: Color(0xFF0052CC), fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -179,14 +186,18 @@ class _LoginScreenState extends State<LoginScreen> {
         content: const SingleChildScrollView(
           child: ListBody(
             children: [
-              Text('Título 1: Aviso de Privacidad', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('Título 1: Aviso de Privacidad',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 5),
-              Text('Datos personales que recabamos y su finalidad En Metrigas...'),
+              Text(
+                  'Datos personales que recabamos y su finalidad En Metrigas...'),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar')),
         ],
       ),
     );
@@ -205,19 +216,24 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Container(
                 width: double.infinity,
                 height: size.height * 0.42,
-                color: const Color(0xFF0052CC), 
+                color: const Color(0xFF0052CC),
                 child: const Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SizedBox(height: 40),
-                    Text('Metri GAS', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.bold)),
+                    Text('Metri GAS',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 44,
+                            fontWeight: FontWeight.bold)),
                     SizedBox(height: 25),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 40.0),
                       child: Text(
                         'Inicia sesion con tu correo\ny contraseña para ingresar',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 18, height: 1.3),
+                        style: TextStyle(
+                            color: Colors.white, fontSize: 18, height: 1.3),
                       ),
                     ),
                   ],
@@ -225,38 +241,47 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Correo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const Text('Correo',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(
                         hintText: 'correoelectrónico@dominio.com',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8)),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'El correo no puede estar vacío';
+                        if (value == null || value.isEmpty)
+                          return 'El correo no puede estar vacío';
                         return null;
                       },
                     ),
                     const SizedBox(height: 20),
-                    const Text('Contraseña', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const Text('Contraseña',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
                       decoration: InputDecoration(
                         hintText: 'contraseña',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8)),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'La contraseña no puede estar vacía';
+                        if (value == null || value.isEmpty)
+                          return 'La contraseña no puede estar vacía';
                         return null;
                       },
                     ),
@@ -268,12 +293,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.black,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                         ),
                         onPressed: _isLoading ? null : _handleLogin,
                         child: _isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text('Continuar', style: TextStyle(fontSize: 16)),
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
+                            : const Text('Continuar',
+                                style: TextStyle(fontSize: 16)),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -281,67 +309,84 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         children: [
                           GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, '/forgot'),
+                            onTap: () =>
+                                Navigator.pushNamed(context, '/forgot'),
                             child: const Text(
                               '¿Olvidaste tu contraseña?',
-                              style: TextStyle(color: Color(0xFF0066FF), fontSize: 15, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                  color: Color(0xFF0066FF),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500),
                             ),
                           ),
                           const SizedBox(height: 20),
                           RichText(
                             text: TextSpan(
-                              style: const TextStyle(color: Colors.black, fontSize: 15),
+                              style: const TextStyle(
+                                  color: Colors.black, fontSize: 15),
                               children: [
-                                const TextSpan(text: '¿Aun no tienes una cuenta? '),
+                                const TextSpan(
+                                    text: '¿Aun no tienes una cuenta? '),
                                 TextSpan(
                                   text: 'Registrarme',
-                                  style: const TextStyle(color: Color(0xFF0044CC), fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                      color: Color(0xFF0044CC),
+                                      fontWeight: FontWeight.bold),
                                   recognizer: TapGestureRecognizer()
-                                    ..onTap = () => Navigator.pushNamed(context, '/register'),
+                                    ..onTap = () => Navigator.pushNamed(
+                                        context, '/register'),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 20),
-
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
                             child: RichText(
                               textAlign: TextAlign.center,
                               text: TextSpan(
-                                style: const TextStyle(color: Colors.black, fontSize: 12, height: 1.4),
+                                style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 12,
+                                    height: 1.4),
                                 children: [
-                                  const TextSpan(text: 'Al continuar, aceptas nuestros '),
+                                  const TextSpan(
+                                      text: 'Al continuar, aceptas nuestros '),
                                   TextSpan(
-                                    text: 'Términos y Condiciones y Aviso de Privacidad',
+                                    text:
+                                        'Términos y Condiciones y Aviso de Privacidad',
                                     style: const TextStyle(
                                       color: Color(0xFF0052CC),
                                       fontWeight: FontWeight.bold,
                                       decoration: TextDecoration.underline,
                                     ),
                                     recognizer: TapGestureRecognizer()
-                                      ..onTap = () => _mostrarTerminosPopUp(context),
+                                      ..onTap =
+                                          () => _mostrarTerminosPopUp(context),
                                   ),
                                 ],
                               ),
                             ),
                           ),
                           const SizedBox(height: 20),
-
                           TextButton.icon(
                             onPressed: () async {
                               // Cambiado a asíncrono para asegurar el guardado persistente del estado "guest"
-                              await StorageService.setMockState(UserState.guest);
+                              await StorageService.setMockState(
+                                  UserState.guest);
                               if (context.mounted) {
-                                Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+                                Navigator.pushNamedAndRemoveUntil(
+                                    context, '/dashboard', (route) => false);
                               }
                             },
-                            icon: const Icon(Icons.arrow_back, size: 16, color: Color(0xFF0052CC)),
+                            icon: const Icon(Icons.arrow_back,
+                                size: 16, color: Color(0xFF0052CC)),
                             label: const Text(
                               'Continuar como invitado',
                               style: TextStyle(
-                                color: Color(0xFF0052CC), 
-                                fontSize: 15, 
+                                color: Color(0xFF0052CC),
+                                fontSize: 15,
                                 fontWeight: FontWeight.bold,
                                 decoration: TextDecoration.underline,
                               ),
