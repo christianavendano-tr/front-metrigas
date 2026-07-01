@@ -4,9 +4,9 @@ import 'dart:math' as math;
 import '../services/meter_manager.dart';
 import '../services/storage_service.dart';
 import '../services/meter_telemetry_service.dart';
+import '../services/socket_services.dart';
 // Agregar esta línea (asumiendo que están en la misma carpeta screens):
 import 'meter_history_screen.dart';
-import 'package:http/http.dart' as http;
 
 /// Dashboard individual de un medidor de gas.
 ///
@@ -121,17 +121,58 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
   Future<void> _loadTelemetry() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+
     try {
+      final socketPercent = await _requestSocketPercentage();
+      if (!mounted) return;
+
+      if (socketPercent != null) {
+        setState(() => _percentAvailable = socketPercent);
+        return;
+      }
+
+      final logsPercent =
+          await MeterManager.obtenerPorcentajeDesdeLogs(_hardwareId);
+      if (!mounted) return;
+
+      if (logsPercent != null) {
+        setState(() => _percentAvailable = logsPercent);
+        return;
+      }
+
       final reading = await _telemetryService.fetchLatestReading(_hardwareId);
       if (!mounted) return;
       if (reading != null) {
         setState(() => _percentAvailable = reading.percentAvailable);
       }
     } catch (_) {
-      // Error silencioso: conserva la última lectura visible.
+      try {
+        final reading = await _telemetryService.fetchLatestReading(_hardwareId);
+        if (!mounted) return;
+        if (reading != null) {
+          setState(() => _percentAvailable = reading.percentAvailable);
+        }
+      } catch (_) {
+        // Error silencioso: conserva la última lectura visible.
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<double?> _requestSocketPercentage() async {
+    final mdnsName = _alias.trim().isNotEmpty ? _alias : _hardwareId;
+
+    if (mdnsName.isEmpty) {
+      return null;
+    }
+
+    final response = await SocketLcgService.sendCommand(
+      mdnsName: mdnsName,
+      commandJson: {'action': 'get_percentage'},
+    );
+
+    return SocketLcgService.parsePercentageFromResponse(response);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -196,8 +237,28 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
 
     if (confirmar != true || !mounted) return;
 
-    // 2. Spinner de eliminación
+    // 2. Intentar reset por socket antes de cualquier borrado
     setState(() => _isDeleting = true);
+
+    try {
+      final response = await SocketLcgService.sendCommand(
+        mdnsName: _alias.trim().isNotEmpty ? _alias : _hardwareId,
+        commandJson: {'action': 'reset'},
+      );
+
+      final resetOk = SocketLcgService.isResetConfirmed(response);
+      if (!resetOk) {
+        if (!mounted) return;
+        setState(() => _isDeleting = false);
+        _showResetBlockedSnack();
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      _showResetBlockedSnack();
+      return;
+    }
 
     bool ok = true;
     final token = SessionService.getToken();
@@ -214,9 +275,7 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
     setState(() => _isDeleting = false);
 
     if (ok) {
-      // Éxito: regresa al Dashboard y muestra confirmación
-      Navigator.pop(
-          context, true); // true = fue eliminado (DashboardScreen recarga)
+      Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -669,6 +728,18 @@ class _MeterDashboardScreenState extends State<MeterDashboardScreen> {
                 textColor: Colors.white,
                 onPressed: () => Navigator.pushNamed(context, '/subscription'),
               ),
+      ),
+    );
+  }
+
+  void _showResetBlockedSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'No se pudo confirmar el reset del medidor. Asegúrate de estar en la misma red del medidor para eliminarlo.',
+        ),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

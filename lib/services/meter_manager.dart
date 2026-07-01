@@ -217,6 +217,62 @@ class MeterManager {
     }
   }
 
+  static double? parseCurrentPercentageFromLogResponse(
+      Map<String, dynamic>? response) {
+    if (response == null) {
+      return null;
+    }
+
+    final dynamic data = response['data'];
+    if (data is! Map) {
+      return null;
+    }
+
+    final dynamic percentage = data['currentPercentage'];
+    if (percentage is num) {
+      return percentage.toDouble();
+    }
+
+    if (percentage is String) {
+      return double.tryParse(percentage);
+    }
+
+    return null;
+  }
+
+  static Future<double?> obtenerPorcentajeDesdeLogs(String meterId) async {
+    final token = SessionService.getToken();
+
+    if (token == null || token.isEmpty) {
+      return null;
+    }
+
+    try {
+      final url = Uri.parse('$_baseUrl/logs/$meterId');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
+
+      return parseCurrentPercentageFromLogResponse(decoded);
+    } catch (e) {
+      debugPrint('❌ Error consultando logs para $meterId: $e');
+      return null;
+    }
+  }
+
   /// 4b. BAJA SOLO EN LOCAL STORAGE
   /// Siempre limpia el caché local, sin importar si hay token activo.
   /// Úsalo para usuarios invitados (sin token) o como segundo paso
