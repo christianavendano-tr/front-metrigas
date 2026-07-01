@@ -5,6 +5,8 @@ import 'dart:convert';
 import '../services/storage_service.dart';
 import '../services/session_service.dart';
 import '../services/meter_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Para controlar las banderas de sincronización
+import '../services/local_meter_socket_service.dart'; // Tu servicio de socket TCP con cifrado LCG
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -51,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         _medidores = lista;
         _isLoadingMeters = false;
       });
+      _verificarYSincronizarPremiumHardware();
     }
   }
 
@@ -79,6 +82,60 @@ class _DashboardScreenState extends State<DashboardScreen>
           backgroundColor: Colors.orange,
         ),
       );
+    }
+  }
+
+  Future<void> _verificarYSincronizarPremiumHardware() async {
+    // 1. Verificamos el estado global del usuario usando tu ValueNotifier nativo
+    final estadoUsuario = StorageService.userStateNotifier.value;
+    
+    // Si el usuario NO es premium activo, salimos de inmediato sin molestar al hardware
+    if (estadoUsuario != UserState.premiumActive) return;
+
+    // Si la lista de medidores está vacía, no hay nada que actualizar
+    if (_medidores.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    // 2. Iteramos por cada medidor que tenga cargado el usuario en su Dashboard
+    for (var medidor in _medidores) {
+      final String idMedidor = medidor['id']?.toString() ?? 'unknown';
+      final String cacheKey = "hw_premium_synced_$idMedidor";
+
+      // 3. Revisamos si el teléfono ya sincronizó exitosamente a este medidor en el pasado
+      bool yaSincronizado = prefs.getBool(cacheKey) ?? false;
+
+      if (!yaSincronizado) {
+        debugPrint("🔄 [Premium Sync] Medidor $idMedidor requiere actualización en hardware. Intentando conexión TCP...");
+
+        try {
+          // 4. Invocamos tu servicio existente. Mandamos el JSON que espera el CASE 2 del Firmware.
+          // Usamos 'metrigas.local' gracias al mDNS que levanta la ESP32.
+          final Map<String, dynamic> respuesta = await LocalMeterSocketService.sendCommand(
+            hostname: 'metrigas.local',
+            commandJson: {
+              "action": "set_premium"
+            },
+            timeout: const Duration(seconds: 4), // Timeout prudente para no congelar hilos
+          );
+
+          // 5. Validamos la respuesta exacta que genera tu firmware: {"status": ["ok", "premium_flag_true"]}
+          final statusResponse = respuesta['status'];
+          if (statusResponse is List && statusResponse.contains('premium_flag_true')) {
+            
+            // Sincronización exitosa: Guardamos el flag en el teléfono para no volver a spamear a la ESP32
+            await prefs.setBool(cacheKey, true);
+            debugPrint("🚀 [Premium Sync] ¡Hardware $idMedidor actualizado y guardado atómicamente en Flash!");
+            
+            // Opcional: Detener el bucle si solo manejas un medidor a la vez, o dejar que continúe con los demás
+            break; 
+          }
+        } catch (e) {
+          // Tu comando sendCommand lanza una Exception si falla la conexión TCP. 
+          // Al atraparla aquí con un try-catch, evitamos crasheos si el usuario no está en su casa.
+          debugPrint("⚠️ [Premium Sync] No se pudo enviar el comando TCP al hardware (posiblemente fuera de rango Wi-Fi): $e");
+        }
+      }
     }
   }
 
